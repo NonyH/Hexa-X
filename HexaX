@@ -3,7 +3,6 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -145,12 +144,12 @@ local function refreshVipControls()
 		if control and control.Parent then
 			local locked = not HEXA_IS_VIP
 			if control:IsA("TextButton") then
-				control.BackgroundColor3 = locked and Color3.fromRGB(70, 65, 45) or Color3.fromRGB(245, 245, 245)
-				control.TextColor3 = locked and Color3.fromRGB(165, 160, 140) or Color3.fromRGB(12, 12, 12)
+				control.BackgroundColor3 = locked and Color3.fromRGB(38, 36, 24) or Color3.fromRGB(15, 15, 15)
+				control.TextColor3 = locked and Color3.fromRGB(150, 150, 145) or Color3.fromRGB(230, 230, 230)
 			else
 				for _, child in ipairs(control:GetDescendants()) do
-					if child:IsA("TextLabel") and child.Name ~= "HexaVipBadge" and child.Name ~= "HexaSliderValue" then
-						child.TextColor3 = locked and Color3.fromRGB(145, 145, 140) or Color3.fromRGB(245, 245, 245)
+					if child:IsA("TextLabel") and child.Name ~= "HexaVipBadge" then
+						child.TextColor3 = locked and Color3.fromRGB(145, 145, 140) or Color3.fromRGB(0, 0, 0)
 					end
 				end
 			end
@@ -191,49 +190,34 @@ if existing then
 end
 
 local Theme = {
-	BG = Color3.fromRGB(8, 8, 8),
-	Panel = Color3.fromRGB(16, 16, 16),
-	Panel2 = Color3.fromRGB(245, 245, 245),
-	Accent = Color3.fromRGB(255, 255, 255),
-	Accent2 = Color3.fromRGB(218, 218, 218),
-	TextMain = Color3.fromRGB(245, 245, 245),
-	TextOff = Color3.fromRGB(12, 12, 12),
-	Active = Color3.fromRGB(232, 232, 232),
-	ActiveText = Color3.fromRGB(0, 0, 0),
-	ToggleOn = Color3.fromRGB(255, 211, 46),
-	ToggleOff = Color3.fromRGB(95, 95, 95),
-	VipGold = Color3.fromRGB(255, 211, 46),
+	BG = Color3.fromRGB(245, 245, 245),
+	Panel = Color3.fromRGB(255, 255, 255),
+	Panel2 = Color3.fromRGB(15, 15, 15),          
+	Accent = Color3.fromRGB(0, 0, 0),             
+	Accent2 = Color3.fromRGB(45, 45, 45),         
+	TextMain = Color3.fromRGB(0, 0, 0),           
+	TextOff = Color3.fromRGB(230, 230, 230),       
+	Active = Color3.fromRGB(30, 30, 30),          
+	ActiveText = Color3.fromRGB(255, 255, 255),   
+	ToggleOn = Color3.fromRGB(40, 200, 40),       
+	ToggleOff = Color3.fromRGB(220, 50, 50),      
 	Danger = Color3.fromRGB(220, 50, 50),
 }
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
 local GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
-local MOBILE_DEVICE = UserInputService.TouchEnabled
-local function calculateMainSize()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	return UDim2.fromOffset(
-		math.min(600, math.max(270, viewport.X - 12)),
-		math.min(430, math.max(270, viewport.Y - 12))
-	)
-end
-local function calculateKeySize()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	return UDim2.fromOffset(
-		math.min(340, math.max(250, viewport.X - 12)),
-		math.min(230, math.max(210, viewport.Y - 12))
-	)
-end
-local MAIN_SIZE = calculateMainSize()
-local KEY_SIZE = calculateKeySize()
+local MAIN_SIZE = UDim2.fromOffset(
+	math.min(600, math.max(300, GUI_VIEWPORT_SIZE.X - 20)),
+	math.min(400, math.max(280, GUI_VIEWPORT_SIZE.Y - 20))
+)
+local KEY_SIZE = UDim2.fromOffset(
+	math.min(320, math.max(250, GUI_VIEWPORT_SIZE.X - 20)),
+	math.min(230, math.max(210, GUI_VIEWPORT_SIZE.Y - 20))
+)
 
 local isInteractingWithSlider = false
 local Lang = {Current = "ES"}
-local UI = {}
-UI.Build = "mobile-local-limit-fix-1"
-local applySearchFilter = function() end
-local refreshFavoritesCard = function() end
-local registerFunctionButton = function() end
 
 local function mkCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -315,7 +299,7 @@ local function addHover(button: TextButton, idleBg: Color3, hoverBg: Color3, act
 	end)
 	button.MouseLeave:Connect(function()
 		if button:GetAttribute("HexaVipOnly") == true and not HEXA_IS_VIP then
-			tween(button, ti, {BackgroundColor3 = Color3.fromRGB(70, 65, 45)})
+			tween(button, ti, {BackgroundColor3 = Color3.fromRGB(38, 36, 24)})
 			return
 		end
 		local isToggle = button:GetAttribute("IsToggle")
@@ -333,7 +317,7 @@ local function neonButton(parent: Instance, text: string, size: UDim2, pos: UDim
 	btn.Size = size
 	btn.Position = pos
 	btn.BackgroundColor3 = Theme.Panel2
-	btn.BackgroundTransparency = 0.04
+	btn.BackgroundTransparency = 0
 	btn.Text = text
 	btn.TextColor3 = Theme.TextOff
 	btn.TextSize = 12
@@ -347,9 +331,6 @@ local function neonButton(parent: Instance, text: string, size: UDim2, pos: UDim
 	btn:SetAttribute("BaseText", text)
 	btn:SetAttribute("IsActive", false)
 	addHover(btn, Theme.Panel2, Theme.Accent2, Theme.Active)
-	task.defer(function()
-		if btn and btn.Parent then registerFunctionButton(btn) end
-	end)
 	return btn, stroke
 end
 
@@ -358,7 +339,7 @@ local function createToggleButton(parent: Instance, text: string, size: UDim2, p
 	btn.Size = size
 	btn.Position = pos
 	btn.BackgroundColor3 = Theme.Panel2
-	btn.BackgroundTransparency = 0.04
+	btn.BackgroundTransparency = 0
 	btn.Text = text
 	btn.TextColor3 = Theme.TextOff
 	btn.TextSize = 12
@@ -400,9 +381,6 @@ local function createToggleButton(parent: Instance, text: string, size: UDim2, p
 	btn:SetAttribute("IsToggle", true)
 	
 	addHover(btn, Theme.Panel2, Theme.Accent2, Theme.Active)
-	task.defer(function()
-		if btn and btn.Parent then registerFunctionButton(btn) end
-	end)
 	return btn
 end
 
@@ -464,8 +442,8 @@ local function setActive(button: TextButton, active: boolean)
 		button.TextColor3 = active and Theme.ActiveText or Theme.TextOff
 	end
 	if button:GetAttribute("HexaVipOnly") == true and not HEXA_IS_VIP then
-		button.BackgroundColor3 = Color3.fromRGB(70, 65, 45)
-		button.TextColor3 = Color3.fromRGB(165, 160, 140)
+		button.BackgroundColor3 = Color3.fromRGB(38, 36, 24)
+		button.TextColor3 = Color3.fromRGB(150, 150, 145)
 	end
 end
 
@@ -489,112 +467,49 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	local currentValue = defaultVal
 
 	local container = Instance.new("Frame")
-	container.Name = "HexaSegmentedSlider"
 	container.BackgroundTransparency = 1
 	container.Size = UDim2.new(1, -24, 0, 52)
 	container.Position = UDim2.new(0, 12, 0, posY)
 	container.ZIndex = 3
 	container.Parent = parent
-	container:SetAttribute("HexaSearchText", title)
 
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
-	label.Text = title
 	label.TextColor3 = Theme.TextMain
 	label.TextSize = 12
 	label.Font = Enum.Font.GothamMedium
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Size = UDim2.new(1, -78, 0, 20)
+	label.Size = UDim2.new(1, 0, 0, 16)
 	label.Position = UDim2.new(0, 0, 0, 0)
 	label.ZIndex = 4
 	label.Parent = container
 
-	local valuePill = Instance.new("TextLabel")
-	valuePill.Name = "HexaSliderValue"
-	valuePill.AnchorPoint = Vector2.new(1, 0)
-	valuePill.Position = UDim2.new(1, 0, 0, 0)
-	valuePill.Size = UDim2.fromOffset(66, 22)
-	valuePill.BackgroundColor3 = Theme.Panel2
-	valuePill.BackgroundTransparency = 0.08
-	valuePill.BorderSizePixel = 0
-	valuePill.TextColor3 = Theme.TextOff
-	valuePill.TextSize = 11
-	valuePill.Font = Enum.Font.GothamBold
-	valuePill.ZIndex = 6
-	valuePill.Parent = container
-	valuePill:SetAttribute("HexaNoTranslate", true)
-	mkCorner(valuePill, 7)
-	mkStroke(valuePill, Theme.Accent, 0.72, 1)
+	local bg = Instance.new("Frame")
+	bg.BackgroundColor3 = Theme.Panel2
+	bg.BorderSizePixel = 0
+	bg.Size = UDim2.new(1, 0, 0, 8)
+	bg.Position = UDim2.new(0, 0, 0, 28)
+	bg.ZIndex = 4
+	bg.Parent = container
+	mkCorner(bg, 999)
+	mkStroke(bg, Theme.Accent, 0.6, 1)
 
-	local shell = Instance.new("Frame")
-	shell.Name = "HexaSliderShell"
-	shell.BackgroundColor3 = Theme.Panel2
-	shell.BackgroundTransparency = 0.88
-	shell.BorderSizePixel = 0
-	shell.Size = UDim2.new(1, 0, 0, 18)
-	shell.Position = UDim2.new(0, 0, 0, 31)
-	shell.ZIndex = 4
-	shell.Active = true
-	shell.ClipsDescendants = false
-	shell.Parent = container
-	mkCorner(shell, 6)
-	mkStroke(shell, Theme.Accent, 0.72, 1)
+	local fill = Instance.new("Frame")
+	fill.BackgroundColor3 = Theme.Accent
+	fill.BorderSizePixel = 0
+	fill.ZIndex = 5
+	fill.Parent = bg
+	mkCorner(fill, 999)
 
-	local segmentHolder = Instance.new("Frame")
-	segmentHolder.Name = "HexaSliderSegments"
-	segmentHolder.BackgroundTransparency = 1
-	segmentHolder.Position = UDim2.new(0, 6, 0, 5)
-	segmentHolder.Size = UDim2.new(1, -12, 0, 8)
-	segmentHolder.ZIndex = 5
-	segmentHolder.Parent = shell
-
-	local segmentCount = 10
-	local segments = {}
-	for index = 1, segmentCount do
-		local segment = Instance.new("Frame")
-		segment.Name = "Segment" .. index
-		segment.BackgroundColor3 = Theme.Accent
-		segment.BackgroundTransparency = 0.82
-		segment.BorderSizePixel = 0
-		segment.Size = UDim2.new(1 / segmentCount, -2, 1, 0)
-		segment.Position = UDim2.new((index - 1) / segmentCount, 1, 0, 0)
-		segment.ZIndex = 5
-		segment.Parent = segmentHolder
-		mkCorner(segment, 3)
-		segments[index] = segment
-	end
-
-	local marker = Instance.new("Frame")
-	marker.Name = "HexaSliderMarker"
-	marker.AnchorPoint = Vector2.new(0.5, 0.5)
-	marker.BackgroundColor3 = Theme.Panel2
-	marker.BorderSizePixel = 0
-	marker.Size = UDim2.fromOffset(7, 24)
-	marker.Position = UDim2.new(0, 0, 0.5, 0)
-	marker.ZIndex = 7
-	marker.Parent = shell
-	mkCorner(marker, 3)
-	mkStroke(marker, Theme.Accent, 0.28, 1)
-
-	local markerInset = Instance.new("Frame")
-	markerInset.AnchorPoint = Vector2.new(0.5, 0.5)
-	markerInset.Position = UDim2.new(0.5, 0, 0.5, 0)
-	markerInset.Size = UDim2.fromOffset(2, 14)
-	markerInset.BackgroundColor3 = Theme.TextOff
-	markerInset.BackgroundTransparency = 0.2
-	markerInset.BorderSizePixel = 0
-	markerInset.ZIndex = 8
-	markerInset.Parent = marker
-	mkCorner(markerInset, 2)
-
-	local hitbox = Instance.new("Frame")
-	hitbox.Name = "HexaSliderHitbox"
-	hitbox.BackgroundTransparency = 1
-	hitbox.Size = UDim2.new(1, 0, 1, 12)
-	hitbox.Position = UDim2.new(0, 0, 0, -6)
-	hitbox.Active = true
-	hitbox.ZIndex = 9
-	hitbox.Parent = shell
+	local knob = Instance.new("Frame")
+	knob.BackgroundColor3 = Theme.Panel
+	knob.BorderSizePixel = 0
+	knob.Size = UDim2.new(0, 16, 0, 16)
+	knob.Position = UDim2.new(1, -8, 0.5, -8)
+	knob.ZIndex = 6
+	knob.Parent = fill
+	mkCorner(knob, 999)
+	mkStroke(knob, Theme.Accent, 0.2, 2)
 
 	local dragging = false
 
@@ -607,13 +522,9 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	function controller.Refresh()
 		local allowedMax = effectiveMax()
 		currentValue = math.clamp(currentValue, minVal, allowedMax)
-		local position = math.clamp((currentValue - minVal) / math.max(1, allowedMax - minVal), 0, 1)
-		local activeSegments = math.floor(position * segmentCount + 0.5)
-		for index, segment in ipairs(segments) do
-			segment.BackgroundTransparency = index <= activeSegments and 0.05 or 0.82
-		end
-		marker.Position = UDim2.new(position, 0, 0.5, 0)
-		valuePill.Text = tostring(math.floor(currentValue + 0.5))
+		local pos = math.clamp((currentValue - minVal) / math.max(1, (allowedMax - minVal)), 0, 1)
+		fill.Size = UDim2.new(pos, 0, 1, 0)
+		label.Text = ("%s: %d"):format(title, math.floor(currentValue + 0.5))
 		onChanged(currentValue)
 	end
 	function controller.Set(value: number)
@@ -627,12 +538,12 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	local function setFromInput(input: InputObject)
 		if vipOnly and not requireVip() then return end
 		local allowedMax = effectiveMax()
-		local position = math.clamp((input.Position.X - shell.AbsolutePosition.X) / math.max(1, shell.AbsoluteSize.X), 0, 1)
-		currentValue = math.floor(minVal + (allowedMax - minVal) * position + 0.5)
+		local pos = math.clamp((input.Position.X - bg.AbsolutePosition.X) / math.max(1, bg.AbsoluteSize.X), 0, 1)
+		currentValue = math.floor(minVal + (allowedMax - minVal) * pos + 0.5)
 		controller.Refresh()
 	end
 
-	hitbox.InputBegan:Connect(function(input)
+	bg.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			if vipOnly and not HEXA_IS_VIP then
 				requireVip()
@@ -640,8 +551,6 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 			end
 			isInteractingWithSlider = true
 			dragging = true
-			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(9, 28)})
-			tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
 			setFromInput(input)
 		end
 	end)
@@ -656,8 +565,6 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 			isInteractingWithSlider = false
-			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(7, 24)})
-			tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08})
 		end
 	end)
 
@@ -666,22 +573,21 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	return controller
 end
 
-local function createKeybindButton(parent: Instance, size: UDim2, pos: UDim2, onKeyChanged: (any) -> ())
+local function createKeybindButton(parent: Instance, size: UDim2, pos: UDim2, onKeyChanged: (Enum.KeyCode | Enum.UserInputType | nil) -> ())
 	local keyBtn = neonButton(parent, "TECLA: AUTOMÁTICA", size, pos)
-	keyBtn:SetAttribute("HexaNoFavorite", true)
 	local binding = false
 
 	keyBtn.MouseButton1Click:Connect(function()
 		if binding then return end
 		binding = true
 		keyBtn.Text = "PRESIONA UNA TECLA..."
+		
 		task.wait(0.1)
-
+		
 		local conn
 		conn = UserInputService.InputBegan:Connect(function(input, gpe)
 			if input.UserInputType == Enum.UserInputType.Touch then
 				keyBtn.Text = "TECLA: AUTOMÁTICA"
-				keyBtn:SetAttribute("BaseText", keyBtn.Text)
 				onKeyChanged(nil)
 				conn:Disconnect()
 				task.delay(0.1, function() binding = false end)
@@ -697,15 +603,14 @@ local function createKeybindButton(parent: Instance, size: UDim2, pos: UDim2, on
 					keyBtn.Text = "TECLA: " .. input.KeyCode.Name
 					onKeyChanged(input.KeyCode)
 				end
-				keyBtn:SetAttribute("BaseText", keyBtn.Text)
 				conn:Disconnect()
 				task.delay(0.1, function() binding = false end)
 			elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3 then
 				local name = input.UserInputType.Name
 				if name == "MouseButton1" then keyBtn.Text = "TECLA: CLIC IZQ."
 				elseif name == "MouseButton2" then keyBtn.Text = "TECLA: CLIC DER."
-				elseif name == "MouseButton3" then keyBtn.Text = "TECLA: CLIC CENTRAL" end
-				keyBtn:SetAttribute("BaseText", keyBtn.Text)
+				elseif name == "MouseButton3" then keyBtn.Text = "TECLA: CLIC CENTRAL"
+				end
 				onKeyChanged(input.UserInputType)
 				conn:Disconnect()
 				task.delay(0.1, function() binding = false end)
@@ -720,9 +625,9 @@ ScreenGui.Name = "HexaX"
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 2147483647
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = TargetParent
 
+local MOBILE_DEVICE = UserInputService.TouchEnabled
 local MobileMovementControls = nil
 local mobileFlyVertical = 0
 local mobileFlyVerticalInput = nil
@@ -791,7 +696,7 @@ local VipNotification = Instance.new("Frame")
 VipNotification.Name = "HexaVipNotification"
 VipNotification.AnchorPoint = Vector2.new(0.5, 0)
 VipNotification.Position = UDim2.new(0.5, 0, 0, -100)
-VipNotification.Size = UDim2.fromOffset(math.min(390, GUI_VIEWPORT_SIZE.X - 16), 82)
+VipNotification.Size = UDim2.new(0, 390, 0, 82)
 VipNotification.BackgroundColor3 = Color3.fromRGB(20, 20, 18)
 VipNotification.BackgroundTransparency = 0.04
 VipNotification.BorderSizePixel = 0
@@ -848,52 +753,6 @@ notifyVipLocked = function()
 end
 
 Lang.Pairs = {
-	{[[PUNTERÍA AUTOMÁTICA
-Activa la puntería a la cabeza o al cuerpo. Puedes dejarla en modo automático o asignar una tecla o botón compatible.
-
-CÍRCULO FOV
-Limita el área donde se seleccionan objetivos. Activa USAR CÍRCULO FOV y ajusta su radio.
-
-MOVIMIENTO Y FÍSICA
-Controla el vuelo, la velocidad, el salto, la gravedad, la caminata aérea y la colisión.
-
-VISUALES ESP
-Muestra esqueletos o líneas hacia otros jugadores y permite limitar la distancia.
-
-TELETRANSPORTE
-Selecciona un jugador y pulsa IR AL JUGADOR. También puedes activar TELETRANSPORTARSE AL RATÓN; en pantallas táctiles se usa tocando la posición.
-
-BUSCADOR Y FAVORITOS
-Escribe el nombre de una función para encontrarla. Los usuarios VIP pueden marcar funciones con la estrella y acceder a ellas desde FAVORITOS.
-
-FUNCIONES VIP
-Las opciones que muestran la etiqueta VIP requieren una clave VIP activa.]], [[AUTO AIM
-Enable aiming at the head or body. You can leave it in automatic mode or assign a compatible key or button.
-
-FOV CIRCLE
-Limits the area where targets are selected. Enable USE FOV CIRCLE and adjust its radius.
-
-MOVEMENT AND PHYSICS
-Controls flight, speed, jumping, gravity, air walk and collision.
-
-ESP VISUALS
-Displays skeletons or lines toward other players and lets you limit the distance.
-
-TELEPORT
-Select a player and press GO TO PLAYER. You can also enable TELEPORT TO MOUSE; on touchscreens, tap the desired position.
-
-SEARCH AND FAVORITES
-Type a feature name to find it. VIP users can mark features with the star and access them from FAVORITES.
-
-VIP FEATURES
-Options displaying the VIP label require an active VIP key.]]},
-	{"HEXA X - TUTORIAL", "HEXA X - TUTORIAL"},
-	{"ENTENDIDO", "GOT IT"},
-	{"BUSCAR FUNCIONES...", "SEARCH FUNCTIONS..."},
-	{"FAVORITOS", "FAVORITES"},
-	{"NO TIENES FUNCIONES FAVORITAS", "YOU HAVE NO FAVORITE FEATURES"},
-	{"SIN RESULTADOS", "NO RESULTS"},
-	{"Elige si la clave será temporal o permanente. Cada código funcionará únicamente para el usuario indicado.", "Choose whether the key will be temporary or permanent. Each code will work only for the specified user."},
 	{"EQUIPAR HERRAMIENTA AUTOMÁTICAMENTE", "AUTO EQUIP TOOL"},
 	{"TELETRANSPORTARSE AL RATÓN", "TELEPORT TO MOUSE"},
 	{"AUTOCLICKER", "AUTOCLICKER"},
@@ -1193,16 +1052,6 @@ function Lang.Set(language)
 		Lang.Button:SetAttribute("BaseText", Lang.Button.Text)
 		Lang.Updating[Lang.Button] = nil
 	end
-	if Lang.MainButton and Lang.MainButton.Parent then
-		Lang.Updating[Lang.MainButton] = true
-		Lang.MainButton.Text = Lang.Current
-		Lang.MainButton:SetAttribute("BaseText", Lang.MainButton.Text)
-		Lang.Updating[Lang.MainButton] = nil
-	end
-	task.defer(function()
-		refreshFavoritesCard()
-		applySearchFilter()
-	end)
 end
 
 ScreenGui.DescendantAdded:Connect(function(object)
@@ -1284,93 +1133,27 @@ MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0, 0, 0, 0) 
 MainFrame.BackgroundColor3 = Theme.BG
-MainFrame.BackgroundTransparency = 0.22
+MainFrame.BackgroundTransparency = 0.05
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 mkCorner(MainFrame, 18)
-mkStroke(MainFrame, Theme.Accent, 0.56, 2)
+mkStroke(MainFrame, Theme.Accent, 0.4, 2)
+makeDraggable(MainFrame, MainFrame)
 
 local bgGradient = Instance.new("UIGradient")
 bgGradient.Rotation = 25
 bgGradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Theme.BG),
 	ColorSequenceKeypoint.new(0.5, Theme.Panel),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 28, 28)),
-})
-bgGradient.Transparency = NumberSequence.new({
-	NumberSequenceKeypoint.new(0, 0.10),
-	NumberSequenceKeypoint.new(0.55, 0.24),
-	NumberSequenceKeypoint.new(1, 0.38),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 220, 220)),
 })
 bgGradient.Parent = MainFrame
 
-UI.Snow = {Flakes = {}, Connection = nil, Accumulator = 0}
-UI.Snow.Background = Instance.new("Frame")
-UI.Snow.Background.Name = "HexaPanelSnow"
-UI.Snow.Background.BackgroundTransparency = 1
-UI.Snow.Background.Size = UDim2.new(1, 0, 1, 0)
-UI.Snow.Background.BorderSizePixel = 0
-UI.Snow.Background.ClipsDescendants = true
-UI.Snow.Background.Active = false
-UI.Snow.Background.ZIndex = 1
-UI.Snow.Background.Parent = MainFrame
-
-do
-	local random = Random.new()
-	for index = 1, 6 do
-		local flake = Instance.new("TextLabel")
-		flake.Name = "HexaSnowflake" .. index
-		flake.BackgroundTransparency = 1
-		flake.AnchorPoint = Vector2.new(0.5, 0.5)
-		flake.Size = UDim2.fromOffset(24, 24)
-		flake.Text = "❄"
-		flake.TextColor3 = Theme.Accent
-		flake.TextSize = random:NextInteger(9, 15)
-		flake.Font = Enum.Font.GothamBold
-		flake.TextTransparency = random:NextNumber(0.62, 0.84)
-		flake.Active = false
-		flake.ZIndex = 1
-		flake.Parent = UI.Snow.Background
-		UI.Snow.Flakes[index] = {
-			Object = flake,
-			X = random:NextNumber(0.03, 0.97),
-			Y = random:NextNumber(-0.2, 1),
-			Speed = random:NextNumber(0.05, 0.10),
-			Drift = random:NextNumber(-0.02, 0.02),
-			Rotation = random:NextNumber(-30, 30),
-			RotationSpeed = random:NextNumber(-20, 20),
-		}
-	end
-
-	UI.Snow.Connection = RunService.RenderStepped:Connect(function(deltaTime)
-		if not MainFrame.Visible then return end
-		UI.Snow.Accumulator += deltaTime
-		if UI.Snow.Accumulator < (1 / 30) then return end
-		local step = UI.Snow.Accumulator
-		UI.Snow.Accumulator = 0
-		for _, data in ipairs(UI.Snow.Flakes) do
-			data.Y += data.Speed * step
-			data.X += data.Drift * step
-			data.Rotation += data.RotationSpeed * step
-			if data.Y > 1.08 then
-				data.Y = -0.08
-				data.X = random:NextNumber(0.03, 0.97)
-			end
-			if data.X < 0.02 then data.X = 0.98 elseif data.X > 0.98 then data.X = 0.02 end
-			data.Object.Position = UDim2.fromScale(data.X, data.Y)
-			data.Object.Rotation = data.Rotation
-		end
-	end)
-end
-
 local Header = Instance.new("Frame")
-Header.BackgroundColor3 = Theme.Panel
-Header.BackgroundTransparency = 0.30
-Header.BorderSizePixel = 0
-Header.Size = UDim2.new(1, 0, 0, 106)
-Header.ZIndex = 4
+Header.BackgroundTransparency = 1
+Header.Size = UDim2.new(1, 0, 0, 58)
 Header.Parent = MainFrame
 
 local HeaderGlow = Instance.new("Frame")
@@ -1384,15 +1167,13 @@ HeaderGlow.Parent = Header
 local Title = Instance.new("TextLabel")
 Title.BackgroundTransparency = 1
 Title.Position = UDim2.new(0, 20, 0, 0)
-Title.Size = UDim2.new(1, -210, 0, 58)
+Title.Size = UDim2.new(1, -160, 1, 0)
 Title.Text = "Hexa X"
 Title.TextColor3 = Theme.TextMain
 Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.TextTruncate = Enum.TextTruncate.AtEnd
 Title.Parent = Header
-makeDraggable(MainFrame, Title)
 
 local CloseButton = neonButton(Header, "X", UDim2.new(0, 34, 0, 34), UDim2.new(1, -46, 0, 12), 4)
 CloseButton.TextColor3 = Theme.Danger
@@ -1401,55 +1182,12 @@ CloseButton.BackgroundColor3 = Theme.Panel2
 local MinButton = neonButton(Header, "-", UDim2.new(0, 34, 0, 34), UDim2.new(1, -86, 0, 12), 4)
 MinButton.TextColor3 = Theme.TextOff
 MinButton.BackgroundColor3 = Theme.Panel2
-MinButton:SetAttribute("HexaNoFavorite", true)
-CloseButton:SetAttribute("HexaNoFavorite", true)
-
-Lang.TutorialButton = neonButton(Header, "?", UDim2.new(0, 34, 0, 34), UDim2.new(1, -126, 0, 12), 4)
-Lang.TutorialButton.TextColor3 = Theme.TextOff
-Lang.TutorialButton.BackgroundColor3 = Theme.Panel2
-Lang.TutorialButton:SetAttribute("HexaNoFavorite", true)
-
-Lang.MainButton = neonButton(Header, "ES", UDim2.new(0, 42, 0, 34), UDim2.new(1, -176, 0, 12), 4)
-Lang.MainButton.TextColor3 = Theme.TextOff
-Lang.MainButton.BackgroundColor3 = Theme.Panel2
-Lang.MainButton:SetAttribute("HexaNoTranslate", true)
-Lang.MainButton:SetAttribute("HexaNoFavorite", true)
-Lang.MainButton.MouseButton1Click:Connect(function()
-	Lang.Set(Lang.Current == "ES" and "EN" or "ES")
-end)
-
-UI.SearchContainer = Instance.new("Frame")
-UI.SearchContainer.Name = "HexaSearchContainer"
-UI.SearchContainer.Position = UDim2.new(0, 20, 0, 61)
-UI.SearchContainer.Size = UDim2.new(1, -40, 0, 34)
-UI.SearchContainer.BackgroundColor3 = Theme.Panel2
-UI.SearchContainer.BackgroundTransparency = 0.06
-UI.SearchContainer.BorderSizePixel = 0
-UI.SearchContainer.Parent = Header
-mkCorner(UI.SearchContainer, 10)
-mkStroke(UI.SearchContainer, Theme.Accent, 0.72, 1)
-
-UI.SearchBox = Instance.new("TextBox")
-UI.SearchBox.Name = "HexaFunctionSearch"
-UI.SearchBox.BackgroundTransparency = 1
-UI.SearchBox.Position = UDim2.new(0, 12, 0, 0)
-UI.SearchBox.Size = UDim2.new(1, -24, 1, 0)
-UI.SearchBox.Text = ""
-UI.SearchBox.PlaceholderText = "BUSCAR FUNCIONES..."
-UI.SearchBox.TextColor3 = Theme.TextOff
-UI.SearchBox.PlaceholderColor3 = Color3.fromRGB(90, 90, 90)
-UI.SearchBox.TextSize = 14
-UI.SearchBox.Font = Enum.Font.GothamMedium
-UI.SearchBox.ClearTextOnFocus = false
-UI.SearchBox.TextXAlignment = Enum.TextXAlignment.Left
-UI.SearchBox.Parent = UI.SearchContainer
-Lang.Set(Lang.Current)
 
 local OwnerVipButton = nil
 local OwnerFrame = nil
 if HEXA_IS_OWNER then
-	Title.Size = UDim2.new(1, -274, 0, 58)
-	OwnerVipButton = neonButton(Header, "★ VIP", UDim2.new(0, 58, 0, 34), UDim2.new(1, -246, 0, 12), 4)
+	Title.Size = UDim2.new(1, -225, 1, 0)
+	OwnerVipButton = neonButton(Header, "★ VIP", UDim2.new(0, 58, 0, 34), UDim2.new(1, -190, 0, 12), 4)
 	OwnerVipButton.TextColor3 = Color3.fromRGB(255, 211, 46)
 	OwnerVipButton.BackgroundColor3 = Color3.fromRGB(40, 34, 15)
 	mkStroke(OwnerVipButton, Color3.fromRGB(255, 211, 46), 0.2, 1)
@@ -1460,7 +1198,6 @@ if HEXA_IS_OWNER then
 	OwnerFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	OwnerFrame.Size = UDim2.fromOffset(430, 410)
 	OwnerFrame.BackgroundColor3 = Theme.BG
-	OwnerFrame.BackgroundTransparency = 0.14
 	OwnerFrame.BorderSizePixel = 0
 	OwnerFrame.Visible = false
 	OwnerFrame.ZIndex = 150
@@ -1538,11 +1275,11 @@ if HEXA_IS_OWNER then
 	local ownerCodeBox = Instance.new("TextBox")
 	ownerCodeBox.Position = UDim2.new(0, 16, 0, 270)
 	ownerCodeBox.Size = UDim2.new(1, -32, 0, 46)
-	ownerCodeBox.BackgroundColor3 = Theme.Panel2
+	ownerCodeBox.BackgroundColor3 = Color3.fromRGB(28, 28, 25)
 	ownerCodeBox.BorderSizePixel = 0
 	ownerCodeBox.PlaceholderText = "CÓDIGO VIP"
 	ownerCodeBox.Text = ""
-	ownerCodeBox.TextColor3 = Color3.fromRGB(120, 88, 0)
+	ownerCodeBox.TextColor3 = Color3.fromRGB(255, 211, 46)
 	ownerCodeBox.TextSize = 10
 	ownerCodeBox.Font = Enum.Font.Code
 	ownerCodeBox.ClearTextOnFocus = false
@@ -1615,7 +1352,6 @@ if HEXA_IS_OWNER then
 		elseif type(toclipboard) == "function" then toclipboard(code) end
 
 		local durationText = ownerType == "TEMPORARY" and ownerDurations[ownerDurationIndex].label or "PERMANENTE"
-		if Lang.Current == "EN" then durationText = Lang.ToEnglish(durationText) end
 		if Lang.Current == "EN" then
 			ownerStatus.Text = "VIP code copied for @" .. canonicalName .. ". Duration: " .. durationText .. "."
 		else
@@ -1642,14 +1378,12 @@ makeDraggable(RestoreOrb, RestoreOrb)
 local Content = Instance.new("ScrollingFrame")
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
-Content.Position = UDim2.new(0, 0, 0, 108)
-Content.Size = UDim2.new(1, 0, 1, -108)
+Content.Position = UDim2.new(0, 0, 0, 60)
+Content.Size = UDim2.new(1, 0, 1, -60)
 Content.ScrollBarThickness = 4
 Content.ScrollBarImageColor3 = Theme.Accent
 Content.CanvasSize = UDim2.new(0, 0, 0, 0)
 Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Content.ScrollBarImageTransparency = 0.24
-Content.ZIndex = 3
 Content.Parent = MainFrame
 
 local Padding = Instance.new("UIPadding")
@@ -1664,334 +1398,69 @@ Layout.Padding = UDim.new(0, 14)
 Layout.SortOrder = Enum.SortOrder.LayoutOrder
 Layout.Parent = Content
 
-UI.FAVORITES_FILE_NAME = ("HexaX_Favorites_%d.json"):format(LocalPlayer.UserId)
-UI.FavoriteIds = {}
-UI.FavoriteRegistry = {}
-UI.FavoriteStars = {}
-
-local function normalizeSearchText(value)
-	local text = string.lower(tostring(value or ""))
-	text = text:gsub("á", "a"):gsub("é", "e"):gsub("í", "i"):gsub("ó", "o"):gsub("ú", "u"):gsub("ü", "u"):gsub("ñ", "n")
-	return text:gsub("%s+", " ")
-end
-
-local function loadFavorites()
-	if type(isfile) ~= "function" or type(readfile) ~= "function" then return end
-	local ok, raw = pcall(function()
-		if isfile(UI.FAVORITES_FILE_NAME) then return readfile(UI.FAVORITES_FILE_NAME) end
-	end)
-	if not ok or type(raw) ~= "string" or raw == "" then return end
-	local decodedOk, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
-	if decodedOk and type(decoded) == "table" then
-		for _, id in ipairs(decoded) do UI.FavoriteIds[tostring(id)] = true end
-	end
-end
-
-local function saveFavorites()
-	if type(writefile) ~= "function" then return end
-	local values = {}
-	for id, enabled in pairs(UI.FavoriteIds) do
-		if enabled then table.insert(values, id) end
-	end
-	table.sort(values)
-	pcall(function() writefile(UI.FAVORITES_FILE_NAME, HttpService:JSONEncode(values)) end)
-end
-
-loadFavorites()
-
-UI.FavoritesCard = Instance.new("Frame")
-UI.FavoritesCard.Name = "HexaFavoritesCard"
-UI.FavoritesCard.LayoutOrder = 0
-UI.FavoritesCard.Size = UDim2.new(1, 0, 0, 60)
-UI.FavoritesCard.BackgroundColor3 = Theme.Panel
-UI.FavoritesCard.BackgroundTransparency = 0.24
-UI.FavoritesCard.BorderSizePixel = 0
-UI.FavoritesCard.ClipsDescendants = true
-UI.FavoritesCard.Visible = false
-UI.FavoritesCard.Parent = Content
-UI.FavoritesCard:SetAttribute("HexaSearchableCard", true)
-mkCorner(UI.FavoritesCard, 16)
-mkStroke(UI.FavoritesCard, Theme.VipGold, 0.18, 1)
-
-UI.FavoritesTitle = sectionTitle(UI.FavoritesCard, "FAVORITOS", UDim2.new(0, 16, 0, 14))
-UI.FavoritesTitle.TextColor3 = Theme.VipGold
-UI.FavoritesEmpty = Instance.new("TextLabel")
-UI.FavoritesEmpty.BackgroundTransparency = 1
-UI.FavoritesEmpty.Position = UDim2.new(0, 16, 0, 38)
-UI.FavoritesEmpty.Size = UDim2.new(1, -32, 0, 26)
-UI.FavoritesEmpty.Text = "NO TIENES FUNCIONES FAVORITAS"
-UI.FavoritesEmpty.TextColor3 = Color3.fromRGB(150, 150, 150)
-UI.FavoritesEmpty.TextSize = 11
-UI.FavoritesEmpty.Font = Enum.Font.GothamMedium
-UI.FavoritesEmpty.TextXAlignment = Enum.TextXAlignment.Left
-UI.FavoritesEmpty.Parent = UI.FavoritesCard
-
-UI.NoResultsLabel = Instance.new("TextLabel")
-UI.NoResultsLabel.LayoutOrder = -2
-UI.NoResultsLabel.Size = UDim2.new(1, 0, 0, 44)
-UI.NoResultsLabel.BackgroundTransparency = 1
-UI.NoResultsLabel.Text = "SIN RESULTADOS"
-UI.NoResultsLabel.TextColor3 = Theme.TextMain
-UI.NoResultsLabel.TextSize = 13
-UI.NoResultsLabel.Font = Enum.Font.GothamBold
-UI.NoResultsLabel.Visible = false
-UI.NoResultsLabel.Parent = Content
-
-local function getCardForButton(button)
-	local current = button.Parent
-	while current and current ~= Content do
-		if current.Parent == Content and current:IsA("Frame") then return current end
-		current = current.Parent
-	end
-	return nil
-end
-
-local function getFavoriteSourceText(button)
-	local base = button:GetAttribute("HexaSpanishBaseText") or button:GetAttribute("BaseText") or button.Text
-	base = Lang.ToSpanish(tostring(base or ""))
-	base = base:gsub("  •  ACTIVO", "")
-	return base
-end
-
-local function getFavoriteId(button)
-	local card = getCardForButton(button)
-	local cardTitle = "GENERAL"
-	if card then
-		for _, child in ipairs(card:GetChildren()) do
-			if child:IsA("TextLabel") and child.Name ~= "HexaVipBadge" then
-				cardTitle = Lang.ToSpanish(child.Text)
-				break
-			end
-		end
-	end
-	return normalizeSearchText(cardTitle .. "|" .. getFavoriteSourceText(button))
-end
-
-local function updateFavoriteStars()
-	for id, star in pairs(UI.FavoriteStars) do
-		if star and star.Parent then
-			star.Visible = HEXA_IS_VIP
-			star.Text = UI.FavoriteIds[id] and "★" or "☆"
-			star.TextColor3 = UI.FavoriteIds[id] and Theme.VipGold or Color3.fromRGB(125, 125, 125)
-		end
-	end
-end
-
-refreshFavoritesCard = function()
-	for _, child in ipairs(UI.FavoritesCard:GetChildren()) do
-		if child:GetAttribute("HexaFavoriteShortcut") == true then child:Destroy() end
-	end
-	local entries = {}
-	for id, enabled in pairs(UI.FavoriteIds) do
-		local entry = enabled and UI.FavoriteRegistry[id] or nil
-		if entry and entry.Button and entry.Button.Parent then
-			table.insert(entries, {id = id, entry = entry, label = getFavoriteSourceText(entry.Button)})
-		end
-	end
-	table.sort(entries, function(a, b) return a.label < b.label end)
-	UI.FavoritesEmpty.Visible = #entries == 0
-	local y = 42
-	for _, item in ipairs(entries) do
-		local shortcut = Instance.new("TextButton")
-		shortcut:SetAttribute("HexaFavoriteShortcut", true)
-		shortcut:SetAttribute("HexaNoFavorite", true)
-		shortcut.Position = UDim2.new(0, 16, 0, y)
-		shortcut.Size = UDim2.new(1, -32, 0, 36)
-		shortcut.BackgroundColor3 = Theme.Panel2
-		shortcut.BorderSizePixel = 0
-		shortcut.Text = item.label
-		shortcut.TextColor3 = Theme.TextOff
-		shortcut.TextSize = 11
-		shortcut.Font = Enum.Font.GothamSemibold
-		shortcut.AutoButtonColor = false
-		shortcut.Parent = UI.FavoritesCard
-		shortcut:SetAttribute("BaseText", item.label)
-		mkCorner(shortcut, 9)
-		mkStroke(shortcut, Theme.VipGold, 0.45, 1)
-		addHover(shortcut, Theme.Panel2, Theme.Accent2, Theme.Active)
-		shortcut.MouseButton1Click:Connect(function()
-			local target = item.entry.Button
-			local targetCard = item.entry.Card
-			if target and target.Parent and targetCard and targetCard.Parent then
-				UI.SearchBox.Text = ""
-				task.defer(function()
-					local relativeY = targetCard.AbsolutePosition.Y - Content.AbsolutePosition.Y + Content.CanvasPosition.Y
-					Content.CanvasPosition = Vector2.new(0, math.max(0, relativeY - 10))
-					local pulse = target:FindFirstChild("HexaFavoritePulse")
-					if not pulse then
-						pulse = mkStroke(target, Theme.VipGold, 0, 3)
-						pulse.Name = "HexaFavoritePulse"
-					end
-					pulse.Enabled = true
-					task.delay(1.1, function()
-						if pulse and pulse.Parent then pulse.Enabled = false end
-					end)
-				end)
-			end
-		end)
-		y += 42
-	end
-	UI.FavoritesCard.Size = UDim2.new(1, 0, 0, #entries > 0 and (y + 8) or 72)
-	UI.FavoritesCard:SetAttribute("HexaHasFavorites", #entries > 0)
-	UI.FavoritesCard.Visible = HEXA_IS_VIP and #entries > 0
-	updateFavoriteStars()
-end
-
-registerFunctionButton = function(button)
-	if not button:IsA("TextButton") or button:GetAttribute("HexaNoFavorite") == true then return end
-	if not button:IsDescendantOf(Content) or button:IsDescendantOf(UI.FavoritesCard) then return end
-	if button:FindFirstAncestor("HexaPlayerDropdown") then return end
-	local parentScrolling = button:FindFirstAncestorOfClass("ScrollingFrame")
-	if parentScrolling and parentScrolling ~= Content then return end
-	local id = getFavoriteId(button)
-	if id == "" or UI.FavoriteRegistry[id] then return end
-	local card = getCardForButton(button)
-	UI.FavoriteRegistry[id] = {Button = button, Card = card}
-	local star = Instance.new("TextButton")
-	star.Name = "HexaFavoriteStar"
-	star.AnchorPoint = Vector2.new(1, 0.5)
-	local starOffset = -8
-	if button:GetAttribute("HexaVipOnly") == true then
-		starOffset = -116
-	elseif button:GetAttribute("IsToggle") == true then
-		starOffset = -76
-	end
-	star.Position = UDim2.new(1, starOffset, 0.5, 0)
-	star.Size = UDim2.fromOffset(24, 24)
-	star.BackgroundTransparency = 1
-	star.Text = UI.FavoriteIds[id] and "★" or "☆"
-	star.TextColor3 = UI.FavoriteIds[id] and Theme.VipGold or Color3.fromRGB(125, 125, 125)
-	star.TextSize = 18
-	star.Font = Enum.Font.GothamBold
-	star.AutoButtonColor = false
-	star.ZIndex = math.max(button.ZIndex + 8, 12)
-	star.Visible = HEXA_IS_VIP
-	star.Parent = button
-	star:SetAttribute("HexaNoTranslate", true)
-	UI.FavoriteStars[id] = star
-	star.MouseButton1Click:Connect(function()
-		if not HEXA_IS_VIP then requireVip(); return end
-		UI.FavoriteIds[id] = not UI.FavoriteIds[id]
-		if not UI.FavoriteIds[id] then UI.FavoriteIds[id] = nil end
-		saveFavorites()
-		refreshFavoritesCard()
-	end)
-	task.defer(refreshFavoritesCard)
-end
-
-local function cardSearchText(card)
-	local parts = {}
-	for _, object in ipairs(card:GetDescendants()) do
-		if (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox")) and object.Name ~= "HexaFavoriteStar" then
-			table.insert(parts, tostring(object.Text or ""))
-			table.insert(parts, tostring(object:GetAttribute("HexaSpanishText") or ""))
-			table.insert(parts, tostring(object:GetAttribute("HexaSpanishBaseText") or ""))
-		end
-		local extra = object:GetAttribute("HexaSearchText")
-		if extra then table.insert(parts, tostring(extra)) end
-	end
-	return normalizeSearchText(table.concat(parts, " "))
-end
-
-applySearchFilter = function()
-	local query = normalizeSearchText(UI.SearchBox.Text)
-	local matches = 0
-	for _, card in ipairs(Content:GetChildren()) do
-		if card:IsA("Frame") and card:GetAttribute("HexaSearchableCard") == true then
-			local defaultVisible = card ~= UI.FavoritesCard or (HEXA_IS_VIP and card:GetAttribute("HexaHasFavorites") == true)
-			local visible = query == "" and defaultVisible or (query ~= "" and string.find(cardSearchText(card), query, 1, true) ~= nil)
-			card.Visible = visible
-			if visible and query ~= "" then matches += 1 end
-			for _, object in ipairs(card:GetDescendants()) do
-				if object:IsA("TextButton") and object.Name ~= "HexaFavoriteStar" then
-					local matchStroke = object:FindFirstChild("HexaSearchMatch")
-					local textMatch = query ~= "" and string.find(normalizeSearchText(object.Text), query, 1, true) ~= nil
-					if textMatch and not matchStroke then
-						matchStroke = mkStroke(object, Theme.VipGold, 0.05, 2)
-						matchStroke.Name = "HexaSearchMatch"
-					elseif matchStroke then
-						matchStroke.Enabled = textMatch
-					end
-				end
-			end
-		end
-	end
-	UI.NoResultsLabel.Visible = query ~= "" and matches == 0
-end
-
-UI.SearchBox:GetPropertyChangedSignal("Text"):Connect(applySearchFilter)
-Content.DescendantAdded:Connect(function()
-	task.defer(applySearchFilter)
-end)
-addVipStateListener(function()
-	refreshFavoritesCard()
-	applySearchFilter()
-end)
-
 local function sectionCard(height: number)
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(1, 0, 0, height)
 	card.BackgroundColor3 = Theme.Panel
-	card.BackgroundTransparency = 0.24
+	card.BackgroundTransparency = 0.1
 	card.BorderSizePixel = 0
 	card.ClipsDescendants = true
 	card.Parent = Content
-	card:SetAttribute("HexaSearchableCard", true)
 	mkCorner(card, 16)
-	mkStroke(card, Theme.Accent, 0.78, 1)
+	mkStroke(card, Theme.Accent, 0.7, 1)
 	return card
 end
 
-UI.ProfileCard = sectionCard(100)
-UI.ProfileCard.LayoutOrder = -1
+local ProfileCard = sectionCard(100)
+ProfileCard.LayoutOrder = -1
 
-UI.PlayerAvatar = Instance.new("ImageLabel")
-UI.PlayerAvatar.Size = UDim2.new(0, 50, 0, 50)
-UI.PlayerAvatar.AnchorPoint = Vector2.new(0.5, 0)
-UI.PlayerAvatar.Position = UDim2.new(0.5, 0, 0, 15)
-UI.PlayerAvatar.BackgroundTransparency = 1
-UI.PlayerAvatar.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-UI.PlayerAvatar.Parent = UI.ProfileCard
-mkCorner(UI.PlayerAvatar, 999)
+local PlayerAvatar = Instance.new("ImageLabel")
+PlayerAvatar.Size = UDim2.new(0, 50, 0, 50)
+PlayerAvatar.AnchorPoint = Vector2.new(0.5, 0)
+PlayerAvatar.Position = UDim2.new(0.5, 0, 0, 15)
+PlayerAvatar.BackgroundTransparency = 1
+PlayerAvatar.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+PlayerAvatar.Parent = ProfileCard
+mkCorner(PlayerAvatar, 999)
 
-UI.PlayerName = Instance.new("TextLabel")
-UI.PlayerName.BackgroundTransparency = 1
-UI.PlayerName.Size = UDim2.new(1, 0, 0, 20)
-UI.PlayerName.AnchorPoint = Vector2.new(0.5, 0)
-UI.PlayerName.Position = UDim2.new(0.5, 0, 0, 72)
-UI.PlayerName.Text = LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")"
-UI.PlayerName.TextColor3 = Theme.TextMain
-UI.PlayerName.TextSize = 13
-UI.PlayerName.Font = Enum.Font.GothamBold
-UI.PlayerName.TextXAlignment = Enum.TextXAlignment.Center
-UI.PlayerName.Parent = UI.ProfileCard
+local PlayerName = Instance.new("TextLabel")
+PlayerName.BackgroundTransparency = 1
+PlayerName.Size = UDim2.new(1, 0, 0, 20)
+PlayerName.AnchorPoint = Vector2.new(0.5, 0)
+PlayerName.Position = UDim2.new(0.5, 0, 0, 72)
+PlayerName.Text = LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")"
+PlayerName.TextColor3 = Theme.TextMain
+PlayerName.TextSize = 13
+PlayerName.Font = Enum.Font.GothamBold
+PlayerName.TextXAlignment = Enum.TextXAlignment.Center
+PlayerName.Parent = ProfileCard
 
-UI.VipProfileBadge = Instance.new("TextLabel")
-UI.VipProfileBadge.AnchorPoint = Vector2.new(1, 0)
-UI.VipProfileBadge.Position = UDim2.new(1, -12, 0, 12)
-UI.VipProfileBadge.Size = UDim2.new(0, 76, 0, 24)
-UI.VipProfileBadge.BackgroundColor3 = Color3.fromRGB(65, 52, 10)
-UI.VipProfileBadge.BorderSizePixel = 0
-UI.VipProfileBadge.TextColor3 = Color3.fromRGB(255, 211, 46)
-UI.VipProfileBadge.TextSize = 10
-UI.VipProfileBadge.Font = Enum.Font.GothamBold
-UI.VipProfileBadge.ZIndex = 5
-UI.VipProfileBadge.Parent = UI.ProfileCard
-UI.VipProfileBadge:SetAttribute("HexaNoTranslate", true)
-mkCorner(UI.VipProfileBadge, 8)
-mkStroke(UI.VipProfileBadge, Color3.fromRGB(255, 211, 46), 0.25, 1)
+local VipProfileBadge = Instance.new("TextLabel")
+VipProfileBadge.AnchorPoint = Vector2.new(1, 0)
+VipProfileBadge.Position = UDim2.new(1, -12, 0, 12)
+VipProfileBadge.Size = UDim2.new(0, 76, 0, 24)
+VipProfileBadge.BackgroundColor3 = Color3.fromRGB(65, 52, 10)
+VipProfileBadge.BorderSizePixel = 0
+VipProfileBadge.TextColor3 = Color3.fromRGB(255, 211, 46)
+VipProfileBadge.TextSize = 10
+VipProfileBadge.Font = Enum.Font.GothamBold
+VipProfileBadge.ZIndex = 5
+VipProfileBadge.Parent = ProfileCard
+VipProfileBadge:SetAttribute("HexaNoTranslate", true)
+mkCorner(VipProfileBadge, 8)
+mkStroke(VipProfileBadge, Color3.fromRGB(255, 211, 46), 0.25, 1)
 
 local function refreshProfileVipBadge()
-	UI.VipProfileBadge.Text = HEXA_IS_OWNER and "★ OWNER" or (HEXA_IS_VIP and "★ VIP" or "FREE")
-	UI.VipProfileBadge.TextColor3 = HEXA_IS_VIP and Color3.fromRGB(255, 211, 46) or Color3.fromRGB(155, 155, 155)
-	UI.VipProfileBadge.BackgroundColor3 = HEXA_IS_VIP and Color3.fromRGB(65, 52, 10) or Color3.fromRGB(45, 45, 45)
+	VipProfileBadge.Text = HEXA_IS_OWNER and "★ OWNER" or (HEXA_IS_VIP and "★ VIP" or "FREE")
+	VipProfileBadge.TextColor3 = HEXA_IS_VIP and Color3.fromRGB(255, 211, 46) or Color3.fromRGB(155, 155, 155)
+	VipProfileBadge.BackgroundColor3 = HEXA_IS_VIP and Color3.fromRGB(65, 52, 10) or Color3.fromRGB(45, 45, 45)
 end
 addVipStateListener(refreshProfileVipBadge)
 refreshProfileVipBadge()
 
-UI.MoveCard = sectionCard(452)
-UI.MoveCard.LayoutOrder = 10
-sectionTitle(UI.MoveCard, "MOVIMIENTO Y FÍSICA", UDim2.new(0, 16, 0, 14))
+local MoveCard = sectionCard(452)
+MoveCard.LayoutOrder = 10
+sectionTitle(MoveCard, "MOVIMIENTO Y FÍSICA", UDim2.new(0, 16, 0, 14))
 
 local flyActive = false
 local speedActive = false
@@ -2003,89 +1472,69 @@ local currentFlySpeed = 200
 local currentSpeed = 150
 local currentJump = 300
 
-UI.flySlider = createSlider(UI.MoveCard, "Velocidad de vuelo", 10, 2500, currentFlySpeed, 42, function(v) currentFlySpeed = v end)
-UI.flyButton = createToggleButton(UI.MoveCard, "VUELO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 95))
-UI.speedButton = createToggleButton(UI.MoveCard, "AUMENTO DE VELOCIDAD", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 142))
-UI.speedSlider = createSlider(UI.MoveCard, "Velocidad al caminar", 16, 2500, currentSpeed, 191, function(v) currentSpeed = v end)
-UI.jumpButton = createToggleButton(UI.MoveCard, "SALTO ALTO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 244))
-UI.jumpSlider = createSlider(UI.MoveCard, "Potencia de salto", 50, 2500, currentJump, 293, function(v) currentJump = v end)
-UI.infiniteJumpButton = createToggleButton(UI.MoveCard, "SALTO INFINITO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 346))
-UI.noclipButton = createToggleButton(UI.MoveCard, "SIN COLISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 393))
+local flySlider = createSlider(MoveCard, "Velocidad de vuelo", 10, 2500, currentFlySpeed, 42, function(v) currentFlySpeed = v end)
+local flyButton = createToggleButton(MoveCard, "VUELO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 95))
+local speedButton = createToggleButton(MoveCard, "AUMENTO DE VELOCIDAD", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 142))
+local speedSlider = createSlider(MoveCard, "Velocidad al caminar", 16, 2500, currentSpeed, 191, function(v) currentSpeed = v end)
+local jumpButton = createToggleButton(MoveCard, "SALTO ALTO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 244))
+local jumpSlider = createSlider(MoveCard, "Potencia de salto", 50, 2500, currentJump, 293, function(v) currentJump = v end)
+local infiniteJumpButton = createToggleButton(MoveCard, "SALTO INFINITO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 346))
+local noclipButton = createToggleButton(MoveCard, "SIN COLISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 393))
 
-UI.CombatCard = sectionCard(348)
-UI.CombatCard.LayoutOrder = 20
-sectionTitle(UI.CombatCard, "COMBATE Y PUNTERÍA", UDim2.new(0, 16, 0, 14))
+local CombatCard = sectionCard(348)
+CombatCard.LayoutOrder = 20
+sectionTitle(CombatCard, "COMBATE Y PUNTERÍA", UDim2.new(0, 16, 0, 14))
 
 local autoAimHeadActive = false
 local autoAimBodyActive = false
 local ignoreFriendsActive = false
 local fovActive = false
 
-local headAimKey: any = nil
-local bodyAimKey: any = nil
+local headAimKey: Enum.KeyCode | Enum.UserInputType | nil = nil
+local bodyAimKey: Enum.KeyCode | Enum.UserInputType | nil = nil
 local maxAimDistance = 500
 local fovRadius = 200
 
-UI.FovCircle = Instance.new("Frame")
-UI.FovCircle.Name = "HexaFOVCircle"
-UI.FovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-UI.FovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
-UI.FovCircle.Size = UDim2.new(0, fovRadius * 2, 0, fovRadius * 2)
-UI.FovCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-UI.FovCircle.BackgroundTransparency = 1
-UI.FovCircle.Visible = false
-UI.FovCircle.ZIndex = 1
-UI.FovCircle.Parent = ScreenGui
-mkCorner(UI.FovCircle, 999)
-UI.FovStroke = mkStroke(UI.FovCircle, Color3.fromRGB(255, 255, 255), 0.2, 1.5)
+local FovCircle = Instance.new("Frame")
+FovCircle.Name = "HexaFOVCircle"
+FovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FovCircle.Position = UDim2.new(0.5, 0, 0.5, 0)
+FovCircle.Size = UDim2.new(0, fovRadius * 2, 0, fovRadius * 2)
+FovCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+FovCircle.BackgroundTransparency = 1
+FovCircle.Visible = false
+FovCircle.ZIndex = 1
+FovCircle.Parent = ScreenGui
+mkCorner(FovCircle, 999)
+local FovStroke = mkStroke(FovCircle, Color3.fromRGB(255, 255, 255), 0.2, 1.5)
 
-UI.aimDistanceSlider = createSlider(UI.CombatCard, "Distancia máxima de puntería (3D)", 50, 2000, maxAimDistance, 38, function(v) maxAimDistance = v end)
-UI.autoAimHeadButton = createToggleButton(
-	UI.CombatCard,
-	"PUNTERÍA AUTOMÁTICA (CABEZA)",
-	UDim2.new(0.62, 0, 0, 38),
-	UDim2.new(0, 16, 0, 96)
-)
-UI.headKeybindBtn = createKeybindButton(
-	UI.CombatCard,
-	UDim2.new(0.32, -8, 0, 38),
-	UDim2.new(0.65, 16, 0, 96),
-	function(key) headAimKey = key end
-)
-UI.autoAimBodyButton = createToggleButton(
-	UI.CombatCard,
-	"PUNTERÍA AUTOMÁTICA (CUERPO)",
-	UDim2.new(0.62, 0, 0, 38),
-	UDim2.new(0, 16, 0, 142)
-)
-UI.bodyKeybindBtn = createKeybindButton(
-	UI.CombatCard,
-	UDim2.new(0.32, -8, 0, 38),
-	UDim2.new(0.65, 16, 0, 142),
-	function(key) bodyAimKey = key end
-)
-UI.ignoreFriendsButton = createToggleButton(UI.CombatCard, "IGNORAR AMIGOS", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 188))
-UI.fovButton = createToggleButton(UI.CombatCard, "USAR CÍRCULO FOV", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 234))
-UI.fovSlider = createSlider(UI.CombatCard, "Radio del FOV", 30, 800, fovRadius, 280, function(v)
+local aimDistanceSlider = createSlider(CombatCard, "Distancia máxima de puntería (3D)", 50, 2000, maxAimDistance, 38, function(v) maxAimDistance = v end)
+local autoAimHeadButton = createToggleButton(CombatCard, "PUNTERÍA AUTOMÁTICA (CABEZA)", UDim2.new(0.62, 0, 0, 38), UDim2.new(0, 16, 0, 96))
+local headKeybindBtn = createKeybindButton(CombatCard, UDim2.new(0.32, -8, 0, 38), UDim2.new(0.65, 16, 0, 96), function(key) headAimKey = key end)
+local autoAimBodyButton = createToggleButton(CombatCard, "PUNTERÍA AUTOMÁTICA (CUERPO)", UDim2.new(0.62, 0, 0, 38), UDim2.new(0, 16, 0, 142))
+local bodyKeybindBtn = createKeybindButton(CombatCard, UDim2.new(0.32, -8, 0, 38), UDim2.new(0.65, 16, 0, 142), function(key) bodyAimKey = key end)
+local ignoreFriendsButton = createToggleButton(CombatCard, "IGNORAR AMIGOS", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 188))
+local fovButton = createToggleButton(CombatCard, "USAR CÍRCULO FOV", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 234))
+local fovSlider = createSlider(CombatCard, "Radio del FOV", 30, 800, fovRadius, 280, function(v)
 	fovRadius = v
-	UI.FovCircle.Size = UDim2.new(0, fovRadius * 2, 0, fovRadius * 2)
+	FovCircle.Size = UDim2.new(0, fovRadius * 2, 0, fovRadius * 2)
 end)
 
-UI.EspCard = sectionCard(204)
-UI.EspCard.LayoutOrder = 30
-sectionTitle(UI.EspCard, "VISUALES (ESP)", UDim2.new(0, 16, 0, 14))
+local EspCard = sectionCard(204)
+EspCard.LayoutOrder = 30
+sectionTitle(EspCard, "VISUALES (ESP)", UDim2.new(0, 16, 0, 14))
 
 local espSkeletonActive = false
 local espLinesActive = false
 local maxEspDistance = 2000
 
-UI.espSkeletonButton = createToggleButton(UI.EspCard, "ESQUELETO ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
-UI.espLinesButton = createToggleButton(UI.EspCard, "LÍNEAS ESP (TRAZADORES)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
-UI.espDistanceSlider = createSlider(UI.EspCard, "Distancia máxima del ESP", 50, 5000, maxEspDistance, 136, function(v) maxEspDistance = v end)
+local espSkeletonButton = createToggleButton(EspCard, "ESQUELETO ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+local espLinesButton = createToggleButton(EspCard, "LÍNEAS ESP (TRAZADORES)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+local espDistanceSlider = createSlider(EspCard, "Distancia máxima del ESP", 50, 5000, maxEspDistance, 136, function(v) maxEspDistance = v end)
 
-UI.EspContainer = Instance.new("Folder")
-UI.EspContainer.Name = "HexaESPLines"
-UI.EspContainer.Parent = ScreenGui
+local EspContainer = Instance.new("Folder")
+EspContainer.Name = "HexaESPLines"
+EspContainer.Parent = ScreenGui
 local espCache = {}
 
 local function getEspFrame(name)
@@ -2096,7 +1545,7 @@ local function getEspFrame(name)
 	f.BorderSizePixel = 0
 	f.Visible = false
 	f.ZIndex = 0
-	f.Parent = UI.EspContainer
+	f.Parent = EspContainer
 	return f
 end
 
@@ -2121,211 +1570,82 @@ local r6Bones = {
 	{"Torso", "Left Leg"}, {"Torso", "Right Leg"}
 }
 
-UI.TpCard = sectionCard(340)
-UI.TpCard.LayoutOrder = 40
-UI.TpTitle = sectionTitle(UI.TpCard, "HERRAMIENTAS DEL JUGADOR", UDim2.new(0, 16, 0, 14))
+local TpCard = sectionCard(340)
+TpCard.LayoutOrder = 40
+local TpTitle = sectionTitle(TpCard, "HERRAMIENTAS DEL JUGADOR", UDim2.new(0, 16, 0, 14))
 
 local selectedTargetPlayer: Player? = nil
-UI.DropdownButton = neonButton(UI.TpCard, "Seleccionar jugador: [ninguno]", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
-UI.DropdownButton.TextXAlignment = Enum.TextXAlignment.Left
-UI.DropdownButton.Text = "  Seleccionar jugador: [ninguno]"
-UI.DropdownButton:SetAttribute("HexaNoFavorite", true)
+local DropdownButton = neonButton(TpCard, "Seleccionar jugador: [ninguno]", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+DropdownButton.TextXAlignment = Enum.TextXAlignment.Left
+DropdownButton.Text = "  Seleccionar jugador: [ninguno]"
 
-UI.DropdownList = Instance.new("ScrollingFrame")
-UI.DropdownList.Name = "HexaPlayerDropdown"
-UI.DropdownList.Visible = false
-UI.DropdownList.Position = UDim2.new(0, 16, 0, 88)
-UI.DropdownList.Size = UDim2.new(1, -32, 0, 180)
-UI.DropdownList.BackgroundColor3 = Theme.Panel
-UI.DropdownList.BackgroundTransparency = 0.12
-UI.DropdownList.BorderSizePixel = 0
-UI.DropdownList.ScrollBarThickness = 4
-UI.DropdownList.ScrollBarImageColor3 = Theme.Accent
-UI.DropdownList.AutomaticCanvasSize = Enum.AutomaticSize.Y
-UI.DropdownList.CanvasSize = UDim2.new(0, 0, 0, 0)
-UI.DropdownList.ClipsDescendants = true
-UI.DropdownList.ZIndex = 20
-UI.DropdownList.Parent = UI.TpCard
-mkCorner(UI.DropdownList, 12)
-mkStroke(UI.DropdownList, Theme.Accent, 0.6, 1)
+local DropdownList = Instance.new("ScrollingFrame")
+DropdownList.Visible = false
+DropdownList.Position = UDim2.new(0, 16, 0, 88)
+DropdownList.Size = UDim2.new(1, -32, 0, 180)
+DropdownList.BackgroundColor3 = Theme.Panel
+DropdownList.BackgroundTransparency = 0
+DropdownList.BorderSizePixel = 0
+DropdownList.ScrollBarThickness = 4
+DropdownList.ScrollBarImageColor3 = Theme.Accent
+DropdownList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+DropdownList.CanvasSize = UDim2.new(0, 0, 0, 0)
+DropdownList.ClipsDescendants = true
+DropdownList.ZIndex = 20
+DropdownList.Parent = TpCard
+mkCorner(DropdownList, 12)
+mkStroke(DropdownList, Theme.Accent, 0.6, 1)
 
-UI.ListLayout = Instance.new("UIListLayout")
-UI.ListLayout.Padding = UDim.new(0, 6)
-UI.ListLayout.Parent = UI.DropdownList
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.Padding = UDim.new(0, 6)
+ListLayout.Parent = DropdownList
 
-UI.GotoButton = neonButton(UI.TpCard, "IR AL JUGADOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+local GotoButton = neonButton(TpCard, "IR AL JUGADOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
 
-UI.CommunityCard = sectionCard(96)
-UI.CommunityCard.LayoutOrder = 90
-sectionTitle(UI.CommunityCard, "COMUNIDAD", UDim2.new(0, 16, 0, 14))
-UI.DiscordButton = neonButton(UI.CommunityCard, "UNIRSE AL DISCORD (COPIAR ENLACE)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+local CommunityCard = sectionCard(96)
+CommunityCard.LayoutOrder = 90
+sectionTitle(CommunityCard, "COMUNIDAD", UDim2.new(0, 16, 0, 14))
+local DiscordButton = neonButton(CommunityCard, "UNIRSE AL DISCORD (COPIAR ENLACE)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 
-UI.AimHighlight = Instance.new("Highlight")
-UI.AimHighlight.Name = "HexaAimHighlight"
-UI.AimHighlight.FillColor = Color3.fromRGB(255, 255, 255)
-UI.AimHighlight.FillTransparency = 0.65
-UI.AimHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-UI.AimHighlight.OutlineTransparency = 0.1
-UI.AimHighlight.Parent = ScreenGui 
+local AimHighlight = Instance.new("Highlight")
+AimHighlight.Name = "HexaAimHighlight"
+AimHighlight.FillColor = Color3.fromRGB(0, 0, 0)
+AimHighlight.FillTransparency = 0.65
+AimHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+AimHighlight.OutlineTransparency = 0.1
+AimHighlight.Parent = ScreenGui 
 
-UI.ConfirmFrame = Instance.new("Frame")
-UI.ConfirmFrame.Visible = false
-UI.ConfirmFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-UI.ConfirmFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-UI.ConfirmFrame.Size = UDim2.new(0, 0, 0, 0)
-UI.ConfirmFrame.BackgroundColor3 = Theme.BG
-UI.ConfirmFrame.BorderSizePixel = 0
-UI.ConfirmFrame.ClipsDescendants = true
-UI.ConfirmFrame.ZIndex = 50
-UI.ConfirmFrame.Parent = ScreenGui
-mkCorner(UI.ConfirmFrame, 16)
-mkStroke(UI.ConfirmFrame, Theme.Danger, 0.35, 2)
+local ConfirmFrame = Instance.new("Frame")
+ConfirmFrame.Visible = false
+ConfirmFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+ConfirmFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+ConfirmFrame.Size = UDim2.new(0, 0, 0, 0)
+ConfirmFrame.BackgroundColor3 = Theme.BG
+ConfirmFrame.BorderSizePixel = 0
+ConfirmFrame.ClipsDescendants = true
+ConfirmFrame.ZIndex = 50
+ConfirmFrame.Parent = ScreenGui
+mkCorner(ConfirmFrame, 16)
+mkStroke(ConfirmFrame, Theme.Danger, 0.35, 2)
 
-UI.ConfirmTitle = Instance.new("TextLabel")
-UI.ConfirmTitle.BackgroundTransparency = 1
-UI.ConfirmTitle.Size = UDim2.new(1, -24, 0, 42)
-UI.ConfirmTitle.Position = UDim2.new(0, 12, 0, 18)
-UI.ConfirmTitle.Text = "¿CERRAR HEXA X?"
-UI.ConfirmTitle.TextColor3 = Theme.TextMain
-UI.ConfirmTitle.TextSize = 15
-UI.ConfirmTitle.Font = Enum.Font.GothamBold
-UI.ConfirmTitle.ZIndex = 51
-UI.ConfirmTitle.Parent = UI.ConfirmFrame
+local ConfirmTitle = Instance.new("TextLabel")
+ConfirmTitle.BackgroundTransparency = 1
+ConfirmTitle.Size = UDim2.new(1, -24, 0, 42)
+ConfirmTitle.Position = UDim2.new(0, 12, 0, 18)
+ConfirmTitle.Text = "¿CERRAR HEXA X?"
+ConfirmTitle.TextColor3 = Theme.TextMain
+ConfirmTitle.TextSize = 15
+ConfirmTitle.Font = Enum.Font.GothamBold
+ConfirmTitle.ZIndex = 51
+ConfirmTitle.Parent = ConfirmFrame
 
-UI.YesBtn = neonButton(UI.ConfirmFrame, "SÍ", UDim2.new(0, 110, 0, 38), UDim2.new(0.5, -116, 1, -56), 51)
-UI.YesBtn.BackgroundColor3 = Theme.Danger
-UI.YesBtn.TextColor3 = Theme.ActiveText
+local YesBtn = neonButton(ConfirmFrame, "SÍ", UDim2.new(0, 110, 0, 38), UDim2.new(0.5, -116, 1, -56), 51)
+YesBtn.BackgroundColor3 = Theme.Danger
+YesBtn.TextColor3 = Theme.ActiveText
 
-UI.NoBtn = neonButton(UI.ConfirmFrame, "CANCELAR", UDim2.new(0, 110, 0, 38), UDim2.new(0.5, 6, 1, -56), 51)
-UI.NoBtn.BackgroundColor3 = Theme.Panel2
-UI.NoBtn.TextColor3 = Theme.TextOff
-
-UI.Tutorial = {}
-function UI.Tutorial.GetTargetSize()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	return UDim2.fromOffset(
-		math.min(430, math.max(280, viewport.X - 24)),
-		math.min(520, math.max(310, viewport.Y - 24))
-	)
-end
-
-UI.Tutorial.Frame = Instance.new("Frame")
-UI.Tutorial.Frame.Name = "HexaTutorialFrame"
-UI.Tutorial.Frame.Visible = false
-UI.Tutorial.Frame.AnchorPoint = Vector2.new(0.5, 0.5)
-UI.Tutorial.Frame.Position = UDim2.new(0.5, 0, 0.5, 0)
-UI.Tutorial.Frame.Size = UDim2.new(0, 0, 0, 0)
-UI.Tutorial.Frame.BackgroundColor3 = Theme.BG
-UI.Tutorial.Frame.BackgroundTransparency = 0.16
-UI.Tutorial.Frame.BorderSizePixel = 0
-UI.Tutorial.Frame.ClipsDescendants = true
-UI.Tutorial.Frame.ZIndex = 60
-UI.Tutorial.Frame.Parent = ScreenGui
-mkCorner(UI.Tutorial.Frame, 16)
-mkStroke(UI.Tutorial.Frame, Theme.Accent, 0.52, 2)
-
-UI.Tutorial.Header = Instance.new("Frame")
-UI.Tutorial.Header.BackgroundColor3 = Theme.Panel
-UI.Tutorial.Header.BackgroundTransparency = 0.24
-UI.Tutorial.Header.BorderSizePixel = 0
-UI.Tutorial.Header.Size = UDim2.new(1, 0, 0, 52)
-UI.Tutorial.Header.ZIndex = 61
-UI.Tutorial.Header.Parent = UI.Tutorial.Frame
-
-UI.Tutorial.Title = Instance.new("TextLabel")
-UI.Tutorial.Title.BackgroundTransparency = 1
-UI.Tutorial.Title.Size = UDim2.new(1, -24, 1, 0)
-UI.Tutorial.Title.Position = UDim2.new(0, 12, 0, 0)
-UI.Tutorial.Title.Text = "HEXA X - TUTORIAL"
-UI.Tutorial.Title.TextColor3 = Theme.TextMain
-UI.Tutorial.Title.TextSize = 16
-UI.Tutorial.Title.Font = Enum.Font.GothamBold
-UI.Tutorial.Title.TextXAlignment = Enum.TextXAlignment.Left
-UI.Tutorial.Title.ZIndex = 62
-UI.Tutorial.Title.Parent = UI.Tutorial.Header
-makeDraggable(UI.Tutorial.Frame, UI.Tutorial.Title)
-
-UI.Tutorial.Scroll = Instance.new("ScrollingFrame")
-UI.Tutorial.Scroll.BackgroundColor3 = Theme.Panel
-UI.Tutorial.Scroll.BackgroundTransparency = 0.30
-UI.Tutorial.Scroll.BorderSizePixel = 0
-UI.Tutorial.Scroll.Position = UDim2.new(0, 14, 0, 64)
-UI.Tutorial.Scroll.Size = UDim2.new(1, -28, 1, -126)
-UI.Tutorial.Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-UI.Tutorial.Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-UI.Tutorial.Scroll.ScrollBarThickness = 4
-UI.Tutorial.Scroll.ScrollBarImageColor3 = Theme.Accent
-UI.Tutorial.Scroll.ScrollBarImageTransparency = 0.30
-UI.Tutorial.Scroll.ZIndex = 61
-UI.Tutorial.Scroll.Parent = UI.Tutorial.Frame
-mkCorner(UI.Tutorial.Scroll, 12)
-mkStroke(UI.Tutorial.Scroll, Theme.Accent, 0.78, 1)
-
-UI.Tutorial.Text = Instance.new("TextLabel")
-UI.Tutorial.Text.BackgroundTransparency = 1
-UI.Tutorial.Text.Position = UDim2.new(0, 12, 0, 12)
-UI.Tutorial.Text.Size = UDim2.new(1, -24, 0, 0)
-UI.Tutorial.Text.AutomaticSize = Enum.AutomaticSize.Y
-UI.Tutorial.Text.Text = [[PUNTERÍA AUTOMÁTICA
-Activa la puntería a la cabeza o al cuerpo. Puedes dejarla en modo automático o asignar una tecla o botón compatible.
-
-CÍRCULO FOV
-Limita el área donde se seleccionan objetivos. Activa USAR CÍRCULO FOV y ajusta su radio.
-
-MOVIMIENTO Y FÍSICA
-Controla el vuelo, la velocidad, el salto, la gravedad, la caminata aérea y la colisión.
-
-VISUALES ESP
-Muestra esqueletos o líneas hacia otros jugadores y permite limitar la distancia.
-
-TELETRANSPORTE
-Selecciona un jugador y pulsa IR AL JUGADOR. También puedes activar TELETRANSPORTARSE AL RATÓN; en pantallas táctiles se usa tocando la posición.
-
-BUSCADOR Y FAVORITOS
-Escribe el nombre de una función para encontrarla. Los usuarios VIP pueden marcar funciones con la estrella y acceder a ellas desde FAVORITOS.
-
-FUNCIONES VIP
-Las opciones que muestran la etiqueta VIP requieren una clave VIP activa.]]
-UI.Tutorial.Text.TextColor3 = Theme.TextMain
-UI.Tutorial.Text.TextSize = 13
-UI.Tutorial.Text.TextWrapped = true
-UI.Tutorial.Text.TextXAlignment = Enum.TextXAlignment.Left
-UI.Tutorial.Text.TextYAlignment = Enum.TextYAlignment.Top
-UI.Tutorial.Text.Font = Enum.Font.GothamMedium
-UI.Tutorial.Text.ZIndex = 62
-UI.Tutorial.Text.Parent = UI.Tutorial.Scroll
-
-UI.Tutorial.CloseButton = neonButton(UI.Tutorial.Frame, "ENTENDIDO", UDim2.new(0, 140, 0, 38), UDim2.new(0.5, -70, 1, -50), 62)
-UI.Tutorial.CloseButton.BackgroundColor3 = Theme.Panel2
-UI.Tutorial.CloseButton.TextColor3 = Theme.TextOff
-UI.Tutorial.CloseButton:SetAttribute("HexaNoFavorite", true)
-
-local function updateResponsiveLayout()
-	GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	MAIN_SIZE = calculateMainSize()
-	KEY_SIZE = calculateKeySize()
-	VipNotification.Size = UDim2.fromOffset(math.min(390, math.max(250, GUI_VIEWPORT_SIZE.X - 16)), 82)
-	if MainFrame.Visible and MainFrame.Size.X.Offset > 0 then MainFrame.Size = MAIN_SIZE end
-	if KeyFrame.Visible and KeyFrame.Size.X.Offset > 0 then KeyFrame.Size = KEY_SIZE end
-	if UI.Tutorial.Frame.Visible and UI.Tutorial.Frame.Size.X.Offset > 0 then UI.Tutorial.Frame.Size = UI.Tutorial.GetTargetSize() end
-	if OwnerFrame then
-		local scale = OwnerFrame:FindFirstChildOfClass("UIScale")
-		if scale then scale.Scale = math.min(1, math.max(0.56, math.min((GUI_VIEWPORT_SIZE.X - 12) / 430, (GUI_VIEWPORT_SIZE.Y - 12) / 410))) end
-	end
-end
-
-local function bindViewportResize()
-	local camera = workspace.CurrentCamera
-	if not camera then return end
-	camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsiveLayout)
-end
-bindViewportResize()
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-	task.defer(function()
-		bindViewportResize()
-		updateResponsiveLayout()
-	end)
-end)
+local NoBtn = neonButton(ConfirmFrame, "CANCELAR", UDim2.new(0, 110, 0, 38), UDim2.new(0.5, 6, 1, -56), 51)
+NoBtn.BackgroundColor3 = Theme.Panel2
+NoBtn.TextColor3 = Theme.TextOff
 
 local flyConn, loopConn, renderConn, espConn, charAddedConn
 local flyBV, flyBG
@@ -2341,7 +1661,7 @@ local function getCharacterData()
 	return char, hum, root
 end
 
-local function isKeyActive(targetKey: any): boolean
+local function isKeyActive(targetKey: Enum.KeyCode | Enum.UserInputType | nil): boolean
 	if not targetKey then return true end
 	if typeof(targetKey) == "EnumItem" then
 		if targetKey.EnumType == Enum.KeyCode then
@@ -2424,7 +1744,7 @@ local function cleanupMovement()
 	restoreNoclip()
 	local _, hum = getCharacterData()
 	if hum then pcall(function() hum.WalkSpeed = speedBase; hum.UseJumpPower = true; hum.JumpPower = jumpBase; hum.PlatformStand = false end) end
-	if UI.AimHighlight then UI.AimHighlight:Destroy() end
+	if AimHighlight then AimHighlight:Destroy() end
 end
 
 local function ensureFly()
@@ -2473,7 +1793,7 @@ local function ensureFly()
 end
 
 local function rebuildPlayerList()
-	for _, child in ipairs(UI.DropdownList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+	for _, child in ipairs(DropdownList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local item = Instance.new("TextButton")
@@ -2485,17 +1805,17 @@ local function rebuildPlayerList()
 			item.Font = Enum.Font.GothamMedium
 			item.AutoButtonColor = false
 			item.ZIndex = 21
-			item.Parent = UI.DropdownList
+			item.Parent = DropdownList
 			mkCorner(item, 10); mkStroke(item, Theme.Accent, 0.7, 1); addHover(item, Theme.Panel2, Theme.Accent2, Theme.Active)
 			item.MouseButton1Click:Connect(function()
-				selectedTargetPlayer = player; UI.DropdownButton.Text = "  Jugador: " .. player.Name; UI.DropdownList.Visible = false
+				selectedTargetPlayer = player; DropdownButton.Text = "  Jugador: " .. player.Name; DropdownList.Visible = false
 			end)
 		end
 	end
 end
 Players.PlayerAdded:Connect(rebuildPlayerList)
 Players.PlayerRemoving:Connect(function(player)
-	if selectedTargetPlayer == player then selectedTargetPlayer = nil; UI.DropdownButton.Text = "  Seleccionar jugador: [ninguno]" end
+	if selectedTargetPlayer == player then selectedTargetPlayer = nil; DropdownButton.Text = "  Seleccionar jugador: [ninguno]" end
 	rebuildPlayerList()
 	if espCache[player] then
 		if espCache[player].Tracer then espCache[player].Tracer:Destroy() end
@@ -2504,23 +1824,23 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
-UI.flyButton.MouseButton1Click:Connect(function() flyActive = not flyActive; setActive(UI.flyButton, flyActive); if flyActive then ensureFly() else clearFly() end end)
-UI.speedButton.MouseButton1Click:Connect(function() speedActive = not speedActive; setActive(UI.speedButton, speedActive); if speedActive then local _,h = getCharacterData() if h then speedBase=h.WalkSpeed end else local _,h=getCharacterData() if h then pcall(function() h.WalkSpeed=speedBase end) end end end)
-UI.jumpButton.MouseButton1Click:Connect(function() jumpActive = not jumpActive; setActive(UI.jumpButton, jumpActive); if jumpActive then local _,h = getCharacterData() if h then jumpBase=h.JumpPower pcall(function() h.UseJumpPower=true end) end else local _,h=getCharacterData() if h then pcall(function() h.UseJumpPower=true; h.JumpPower=jumpBase end) end end end)
-UI.infiniteJumpButton.MouseButton1Click:Connect(function() infiniteJumpActive = not infiniteJumpActive; setActive(UI.infiniteJumpButton, infiniteJumpActive) end)
-UI.noclipButton.MouseButton1Click:Connect(function() noclipActive = not noclipActive; setActive(UI.noclipButton, noclipActive); if not noclipActive then restoreNoclip() end end)
+flyButton.MouseButton1Click:Connect(function() flyActive = not flyActive; setActive(flyButton, flyActive); if flyActive then ensureFly() else clearFly() end end)
+speedButton.MouseButton1Click:Connect(function() speedActive = not speedActive; setActive(speedButton, speedActive); if speedActive then local _,h = getCharacterData() if h then speedBase=h.WalkSpeed end else local _,h=getCharacterData() if h then pcall(function() h.WalkSpeed=speedBase end) end end end)
+jumpButton.MouseButton1Click:Connect(function() jumpActive = not jumpActive; setActive(jumpButton, jumpActive); if jumpActive then local _,h = getCharacterData() if h then jumpBase=h.JumpPower pcall(function() h.UseJumpPower=true end) end else local _,h=getCharacterData() if h then pcall(function() h.UseJumpPower=true; h.JumpPower=jumpBase end) end end end)
+infiniteJumpButton.MouseButton1Click:Connect(function() infiniteJumpActive = not infiniteJumpActive; setActive(infiniteJumpButton, infiniteJumpActive) end)
+noclipButton.MouseButton1Click:Connect(function() noclipActive = not noclipActive; setActive(noclipButton, noclipActive); if not noclipActive then restoreNoclip() end end)
 
-UI.autoAimHeadButton.MouseButton1Click:Connect(function() autoAimHeadActive = not autoAimHeadActive; setActive(UI.autoAimHeadButton, autoAimHeadActive); if autoAimHeadActive and autoAimBodyActive then autoAimBodyActive=false; setActive(UI.autoAimBodyButton,false) end; if not autoAimHeadActive and not autoAimBodyActive then UI.AimHighlight.Adornee=nil end end)
-UI.autoAimBodyButton.MouseButton1Click:Connect(function() autoAimBodyActive = not autoAimBodyActive; setActive(UI.autoAimBodyButton, autoAimBodyActive); if autoAimBodyActive and autoAimHeadActive then autoAimHeadActive=false; setActive(UI.autoAimHeadButton,false) end; if not autoAimHeadActive and not autoAimBodyActive then UI.AimHighlight.Adornee=nil end end)
-UI.ignoreFriendsButton.MouseButton1Click:Connect(function() ignoreFriendsActive = not ignoreFriendsActive; setActive(UI.ignoreFriendsButton, ignoreFriendsActive) end)
-UI.fovButton.MouseButton1Click:Connect(function() fovActive = not fovActive; setActive(UI.fovButton, fovActive); UI.FovCircle.Visible = fovActive end)
+autoAimHeadButton.MouseButton1Click:Connect(function() autoAimHeadActive = not autoAimHeadActive; setActive(autoAimHeadButton, autoAimHeadActive); if autoAimHeadActive and autoAimBodyActive then autoAimBodyActive=false; setActive(autoAimBodyButton,false) end; if not autoAimHeadActive and not autoAimBodyActive then AimHighlight.Adornee=nil end end)
+autoAimBodyButton.MouseButton1Click:Connect(function() autoAimBodyActive = not autoAimBodyActive; setActive(autoAimBodyButton, autoAimBodyActive); if autoAimBodyActive and autoAimHeadActive then autoAimHeadActive=false; setActive(autoAimHeadButton,false) end; if not autoAimHeadActive and not autoAimBodyActive then AimHighlight.Adornee=nil end end)
+ignoreFriendsButton.MouseButton1Click:Connect(function() ignoreFriendsActive = not ignoreFriendsActive; setActive(ignoreFriendsButton, ignoreFriendsActive) end)
+fovButton.MouseButton1Click:Connect(function() fovActive = not fovActive; setActive(fovButton, fovActive); FovCircle.Visible = fovActive end)
 
-UI.espSkeletonButton.MouseButton1Click:Connect(function() espSkeletonActive = not espSkeletonActive; setActive(UI.espSkeletonButton, espSkeletonActive) end)
-UI.espLinesButton.MouseButton1Click:Connect(function() espLinesActive = not espLinesActive; setActive(UI.espLinesButton, espLinesActive) end)
+espSkeletonButton.MouseButton1Click:Connect(function() espSkeletonActive = not espSkeletonActive; setActive(espSkeletonButton, espSkeletonActive) end)
+espLinesButton.MouseButton1Click:Connect(function() espLinesActive = not espLinesActive; setActive(espLinesButton, espLinesActive) end)
 
-UI.DiscordButton.MouseButton1Click:Connect(function() local link="https://discord.gg/sewRzHAG5J" if setclipboard then setclipboard(link) elseif toclipboard then toclipboard(link) end UI.DiscordButton.Text="¡ENLACE COPIADO AL PORTAPAPELES!" task.delay(2, function() UI.DiscordButton.Text="UNIRSE AL DISCORD (COPIAR ENLACE)" end) end)
-UI.DropdownButton.MouseButton1Click:Connect(function() rebuildPlayerList(); UI.DropdownList.Visible = not UI.DropdownList.Visible end)
-UI.GotoButton.MouseButton1Click:Connect(function() if selectedTargetPlayer and selectedTargetPlayer.Character then local targetRoot = selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") local _, _, root = getCharacterData() if root and targetRoot then pcall(function() root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0) end) end end end)
+DiscordButton.MouseButton1Click:Connect(function() local link="https://discord.gg/sewRzHAG5J" if setclipboard then setclipboard(link) elseif toclipboard then toclipboard(link) end DiscordButton.Text="¡ENLACE COPIADO AL PORTAPAPELES!" task.delay(2, function() DiscordButton.Text="UNIRSE AL DISCORD (COPIAR ENLACE)" end) end)
+DropdownButton.MouseButton1Click:Connect(function() rebuildPlayerList(); DropdownList.Visible = not DropdownList.Visible end)
+GotoButton.MouseButton1Click:Connect(function() if selectedTargetPlayer and selectedTargetPlayer.Character then local targetRoot = selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") local _, _, root = getCharacterData() if root and targetRoot then pcall(function() root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0) end) end end end)
 UserInputService.JumpRequest:Connect(function() if infiniteJumpActive then local _, hum = getCharacterData() if hum and hum.Health > 0 then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end) end end end)
 
 local tweenIn = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -2753,17 +2073,17 @@ renderConn = RunService.RenderStepped:Connect(function()
 		if targetPlayer and targetPlayer.Character then
 			local targetPart = (isHeadActive and targetPlayer.Character:FindFirstChild("Head")) or targetPlayer.Character:FindFirstChild("UpperTorso") or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
 			if targetPart then
-				if UI.AimHighlight.Adornee ~= targetPlayer.Character then UI.AimHighlight.Adornee = targetPlayer.Character end
+				if AimHighlight.Adornee ~= targetPlayer.Character then AimHighlight.Adornee = targetPlayer.Character end
 				local cam = workspace.CurrentCamera
 				if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position) end
 			else
-				if UI.AimHighlight.Adornee ~= nil then UI.AimHighlight.Adornee = nil end
+				if AimHighlight.Adornee ~= nil then AimHighlight.Adornee = nil end
 			end
 		else
-			if UI.AimHighlight.Adornee ~= nil then UI.AimHighlight.Adornee = nil end
+			if AimHighlight.Adornee ~= nil then AimHighlight.Adornee = nil end
 		end
 	else
-		if UI.AimHighlight.Adornee ~= nil then UI.AimHighlight.Adornee = nil end
+		if AimHighlight.Adornee ~= nil then AimHighlight.Adornee = nil end
 	end
 end)
 
@@ -2810,42 +2130,30 @@ RestoreOrb.MouseButton1Click:Connect(function()
 	end)
 end)
 
-Lang.TutorialButton.MouseButton1Click:Connect(function()
-	animateOpen(UI.Tutorial.Frame, UI.Tutorial.GetTargetSize(), "BACK")
-end)
-
-UI.Tutorial.CloseButton.MouseButton1Click:Connect(function()
-	local closeTutorial = tween(UI.Tutorial.Frame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
-	closeTutorial.Completed:Connect(function()
-		UI.Tutorial.Frame.Visible = false
-	end)
-end)
-
 CloseButton.MouseButton1Click:Connect(function()
-	UI.ConfirmFrame.Visible = true
-	animateOpen(UI.ConfirmFrame, UDim2.new(0, 280, 0, 140))
+	ConfirmFrame.Visible = true
+	animateOpen(ConfirmFrame, UDim2.new(0, 280, 0, 140))
 	tween(MainFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	task.delay(0.35, function() MainFrame.Visible = false end)
 end)
 
-UI.NoBtn.MouseButton1Click:Connect(function()
-	local t = tween(UI.ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
+NoBtn.MouseButton1Click:Connect(function()
+	local t = tween(ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	MainFrame.Visible = true
 	animateOpen(MainFrame, MAIN_SIZE)
 	t.Completed:Connect(function()
-		UI.ConfirmFrame.Visible = false
+		ConfirmFrame.Visible = false
 	end)
 end)
 
-UI.YesBtn.MouseButton1Click:Connect(function()
-	local t = tween(UI.ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
+YesBtn.MouseButton1Click:Connect(function()
+	local t = tween(ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	t.Completed:Connect(function()
 		cleanupMovement()
 		if loopConn then loopConn:Disconnect() end
 		if espConn then espConn:Disconnect() end
 		if renderConn then renderConn:Disconnect() end
 		if charAddedConn then charAddedConn:Disconnect() end
-		if UI.Snow.Connection then UI.Snow.Connection:Disconnect(); UI.Snow.Connection = nil end
 		if ScreenGui then ScreenGui:Destroy() end
 	end)
 end)
@@ -3283,8 +2591,8 @@ task.spawn(function()
 		end
 
 		function X:setupPlayerTools()
-			self.PlayerToolsCard = UI.TpCard
-			self.PlayerToolsTitle = UI.TpTitle
+			self.PlayerToolsCard = TpCard
+			self.PlayerToolsTitle = TpTitle
 			self.SpectateButton = createToggleButton(self.PlayerToolsCard, "ESPECTAR JUGADOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
 			markVipControl(self.SpectateButton)
 			self.InspectorButton = createToggleButton(self.PlayerToolsCard, "INSPECTOR DE JUGADOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 182))
@@ -3643,7 +2951,7 @@ task.spawn(function()
 			self.PerformanceButton = createToggleButton(self.MiscCard, "MODO RENDIMIENTO: CARTÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 228))
 			self.StreamerButton = createToggleButton(self.MiscCard, "MODO TRANSMISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 274))
 			self.AutoClickerButton = createToggleButton(self.MiscCard, "AUTOCLICKER", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 320))
-			self.AutoClickCpsSlider = createSlider(self.MiscCard, "Clics por segundo", 1, 100, self.AutoClickCps, 366, function(value)
+			self.AutoClickCpsSlider = createSlider(self.MiscCard, "Clics por segundo", 1, 60, self.AutoClickCps, 366, function(value)
 				self.AutoClickCps = value
 			end, true)
 			markVipControl(self.AutoClickerButton)
@@ -3746,7 +3054,7 @@ task.spawn(function()
 
 		function X:updateAutoClicker(now)
 			if not self.AutoClicker or not HEXA_IS_VIP then return end
-			local cps = math.clamp(self.AutoClickCps, 1, 100)
+			local cps = math.clamp(self.AutoClickCps, 1, 60)
 			if now - self.LastAutoClick < (1 / cps) then return end
 			local clickPosition = self:getAutoClickPosition()
 			if self:isPointerOverInterface(clickPosition) then return end
@@ -3874,10 +3182,10 @@ task.spawn(function()
 		end
 
 		function X:applyStreamer()
-			UI.PlayerAvatar.Visible = not self.Streamer
-			UI.PlayerName.Text = self.Streamer and "MODO TRANSMISIÓN" or (LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")")
+			PlayerAvatar.Visible = not self.Streamer
+			PlayerName.Text = self.Streamer and "MODO TRANSMISIÓN" or (LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")")
 			ByNonyLabel.Visible = not self.Streamer
-			UI.VipProfileBadge.Visible = not self.Streamer
+			VipProfileBadge.Visible = not self.Streamer
 			if OwnerVipButton then OwnerVipButton.Visible = not self.Streamer end
 			if OwnerFrame and self.Streamer then OwnerFrame.Visible = false end
 			if self.Watermark then self.Watermark.Text = self.Streamer and "HEXA X" or "HEXA X  •  POR NONY" end
@@ -4004,9 +3312,9 @@ task.spawn(function()
 			espLinesActive = false
 			pcall(clearFly)
 			pcall(restoreNoclip)
-			UI.FovCircle.Visible = false
-			UI.AimHighlight.Adornee = nil
-			local buttons = {UI.flyButton, UI.speedButton, UI.jumpButton, UI.infiniteJumpButton, UI.noclipButton, UI.autoAimHeadButton, UI.autoAimBodyButton, UI.ignoreFriendsButton, UI.fovButton, UI.espSkeletonButton, UI.espLinesButton}
+			FovCircle.Visible = false
+			AimHighlight.Adornee = nil
+			local buttons = {flyButton, speedButton, jumpButton, infiniteJumpButton, noclipButton, autoAimHeadButton, autoAimBodyButton, ignoreFriendsButton, fovButton, espSkeletonButton, espLinesButton}
 			for _, button in ipairs(buttons) do self:toggle(button, false) end
 			local _, humanoid = self:getCharacter()
 			if humanoid then
@@ -4021,9 +3329,9 @@ task.spawn(function()
 			for _, resetter in ipairs(self.Resetters) do
 				pcall(resetter)
 			end
-			UI.DropdownList.Visible = false
-			UI.FovCircle.Visible = false
-			UI.AimHighlight.Adornee = nil
+			DropdownList.Visible = false
+			FovCircle.Visible = false
+			AimHighlight.Adornee = nil
 			MainFrame.Visible = true
 			RestoreOrb.Visible = false
 		end
@@ -4071,7 +3379,7 @@ task.spawn(function()
 				return point.X >= absolutePosition.X and point.X <= absolutePosition.X + absoluteSize.X
 					and point.Y >= absolutePosition.Y and point.Y <= absolutePosition.Y + absoluteSize.Y
 			end
-			return contains(MainFrame) or contains(KeyFrame) or contains(UI.ConfirmFrame)
+			return contains(MainFrame) or contains(KeyFrame) or contains(ConfirmFrame)
 				or contains(RestoreOrb) or contains(self.InfoHud) or contains(self.Watermark) or contains(self.InspectorFrame)
 				or contains(OwnerFrame) or contains(VipNotification) or contains(MobileFlyControls)
 		end
