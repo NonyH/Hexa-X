@@ -25,7 +25,7 @@ local function rollingHash(text, seed)
 	return hash
 end
 
-local function generateLegacyVipCode(username, userId)
+local function generateVipCode(username, userId)
 	local numericId = tonumber(userId) or 0
 	local payload = tostring(numericId) .. ":" .. VIP_SECRET
 	local first = rollingHash(payload, 5381)
@@ -33,67 +33,9 @@ local function generateLegacyVipCode(username, userId)
 	return ("HXVIP-%08X-%08X"):format(first, second)
 end
 
-local function vipSignature(targetUserId, expiresAt, nonce)
-	local payload = ("U:%d:%d:%s:%s"):format(targetUserId, expiresAt, nonce, VIP_SECRET)
-	local first = rollingHash(payload, 5381)
-	local second = rollingHash(string.reverse(payload), 7919)
-	return first, second
-end
-
-local function generateVipCode(userId, durationSeconds)
-	local targetUserId = math.max(0, math.floor(tonumber(userId) or 0))
-	local duration = math.max(0, math.floor(tonumber(durationSeconds) or 0))
-	local expiresAt = duration > 0 and (os.time() + duration) or 0
-	local nonce = ("%06X"):format(Random.new():NextInteger(0, 16777215))
-	local first, second = vipSignature(targetUserId, expiresAt, nonce)
-	return ("HX2-U-%d-%d-%s-%08X-%08X"):format(targetUserId, expiresAt, nonce, first, second)
-end
-
-local function validateVipCode(code, username, userId)
-	if type(code) ~= "string" then return false, {reason = "INVALID"} end
-	local normalized = string.upper(code:gsub("%s+", ""))
-	local targetText, expiresText, nonce, firstText, secondText = normalized:match(
-		"^HX2%-U%-(%d+)%-(%d+)%-(%x%x%x%x%x%x)%-(%x%x%x%x%x%x%x%x)%-(%x%x%x%x%x%x%x%x)$"
-	)
-
-	if targetText then
-		local targetUserId = tonumber(targetText) or 0
-		local expiresAt = tonumber(expiresText) or 0
-		local expectedFirst, expectedSecond = vipSignature(targetUserId, expiresAt, nonce)
-		if tonumber(firstText, 16) ~= expectedFirst or tonumber(secondText, 16) ~= expectedSecond then
-			return false, {reason = "INVALID"}
-		end
-		if targetUserId ~= (tonumber(userId) or 0) then
-			return false, {reason = "USER"}
-		end
-		if expiresAt > 0 and os.time() >= expiresAt then
-			return false, {reason = "EXPIRED", expiresAt = expiresAt}
-		end
-		return true, {
-			scope = "USER",
-			targetUserId = targetUserId,
-			expiresAt = expiresAt,
-			permanent = expiresAt == 0,
-			nonce = nonce,
-		}
-	end
-
-	if normalized == generateLegacyVipCode(username, userId) then
-		return true, {
-			scope = "USER",
-			targetUserId = tonumber(userId) or 0,
-			expiresAt = 0,
-			permanent = true,
-			legacy = true,
-		}
-	end
-
-	return false, {reason = "INVALID"}
-end
-
 local function isValidVipCode(code, username, userId)
-	local valid = validateVipCode(code, username, userId)
-	return valid
+	if type(code) ~= "string" then return false end
+	return string.upper(code:gsub("%s+", "")) == generateVipCode(username, userId)
 end
 
 local function readSavedVipCode()
@@ -109,26 +51,11 @@ local function saveVipCode(code)
 	pcall(function() writefile(VIP_FILE_NAME, tostring(code)) end)
 end
 
-local function clearSavedVipCode()
-	if type(delfile) == "function" and type(isfile) == "function" then
-		local removed = pcall(function()
-			if isfile(VIP_FILE_NAME) then delfile(VIP_FILE_NAME) end
-		end)
-		if removed then return end
-	end
-	if type(writefile) == "function" then
-		pcall(function() writefile(VIP_FILE_NAME, "") end)
-	end
-end
-
 local HEXA_IS_OWNER = normalizeUsername(LocalPlayer.Name) == normalizeUsername(OWNER_USERNAME)
-local HEXA_HAS_PERMANENT_ACCESS = HEXA_IS_OWNER
-	or VIP_USERNAMES[normalizeUsername(LocalPlayer.Name)] == true
 local savedVipCode = readSavedVipCode()
-local savedVipValid, savedVipInfo = validateVipCode(savedVipCode, LocalPlayer.Name, LocalPlayer.UserId)
-if savedVipCode and not savedVipValid then clearSavedVipCode() end
-local HEXA_VIP_EXPIRES_AT = savedVipValid and (savedVipInfo.expiresAt or 0) or 0
-local HEXA_IS_VIP = HEXA_HAS_PERMANENT_ACCESS or savedVipValid
+local HEXA_IS_VIP = HEXA_IS_OWNER
+	or VIP_USERNAMES[normalizeUsername(LocalPlayer.Name)] == true
+	or isValidVipCode(savedVipCode, LocalPlayer.Name, LocalPlayer.UserId)
 
 local AllSliders = {}
 local VipControls = {}
@@ -157,17 +84,9 @@ local function refreshVipControls()
 	end
 end
 
-local function setVipState(enabled, code, vipInfo)
-	HEXA_IS_VIP = HEXA_HAS_PERMANENT_ACCESS or enabled == true
-	HEXA_VIP_EXPIRES_AT = 0
-	if HEXA_IS_VIP and not HEXA_HAS_PERMANENT_ACCESS and vipInfo then
-		HEXA_VIP_EXPIRES_AT = tonumber(vipInfo.expiresAt) or 0
-	end
-	if HEXA_IS_VIP and code then
-		saveVipCode(code)
-	elseif not HEXA_IS_VIP then
-		clearSavedVipCode()
-	end
+local function setVipState(enabled, code)
+	HEXA_IS_VIP = HEXA_IS_OWNER or enabled == true
+	if HEXA_IS_VIP and code then saveVipCode(code) end
 	for _, slider in ipairs(AllSliders) do
 		pcall(function() slider.Refresh() end)
 	end
@@ -206,15 +125,8 @@ local Theme = {
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
-local GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
-local MAIN_SIZE = UDim2.fromOffset(
-	math.min(600, math.max(300, GUI_VIEWPORT_SIZE.X - 20)),
-	math.min(400, math.max(280, GUI_VIEWPORT_SIZE.Y - 20))
-)
-local KEY_SIZE = UDim2.fromOffset(
-	math.min(320, math.max(250, GUI_VIEWPORT_SIZE.X - 20)),
-	math.min(230, math.max(210, GUI_VIEWPORT_SIZE.Y - 20))
-)
+local MAIN_SIZE = UDim2.new(0, 600, 0, 400)
+local KEY_SIZE = UDim2.new(0, 320, 0, 230)
 
 local isInteractingWithSlider = false
 local Lang = {Current = "ES"}
@@ -627,71 +539,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 2147483647
 ScreenGui.Parent = TargetParent
 
-local MOBILE_DEVICE = UserInputService.TouchEnabled
-local MobileMovementControls = nil
-local mobileFlyVertical = 0
-local mobileFlyVerticalInput = nil
-local MobileFlyControls = nil
-
-if MOBILE_DEVICE then
-	pcall(function()
-		local playerModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
-		MobileMovementControls = playerModule:GetControls()
-	end)
-
-	MobileFlyControls = Instance.new("Frame")
-	MobileFlyControls.Name = "HexaMobileFlyControls"
-	MobileFlyControls.AnchorPoint = Vector2.new(1, 0.5)
-	MobileFlyControls.Position = UDim2.new(1, -14, 0.5, 70)
-	MobileFlyControls.Size = UDim2.fromOffset(92, 96)
-	MobileFlyControls.BackgroundTransparency = 1
-	MobileFlyControls.Visible = false
-	MobileFlyControls.ZIndex = 120
-	MobileFlyControls.Parent = ScreenGui
-
-	local mobileFlyUpButton = neonButton(MobileFlyControls, "SUBIR", UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 0, 0), 121)
-	local mobileFlyDownButton = neonButton(MobileFlyControls, "BAJAR", UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 1, -42), 121)
-
-	local function bindMobileFlyButton(button, direction)
-		button.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-				mobileFlyVerticalInput = input
-				mobileFlyVertical = direction
-			end
-		end)
-		button.InputEnded:Connect(function(input)
-			if mobileFlyVerticalInput == input then
-				mobileFlyVerticalInput = nil
-				mobileFlyVertical = 0
-			end
-		end)
-	end
-
-	bindMobileFlyButton(mobileFlyUpButton, 1)
-	bindMobileFlyButton(mobileFlyDownButton, -1)
-	UserInputService.InputEnded:Connect(function(input)
-		if mobileFlyVerticalInput == input then
-			mobileFlyVerticalInput = nil
-			mobileFlyVertical = 0
-		end
-	end)
-end
-
-local function setMobileFlyControlsVisible(visible)
-	mobileFlyVertical = 0
-	mobileFlyVerticalInput = nil
-	if MobileFlyControls then MobileFlyControls.Visible = visible == true end
-end
-
-task.spawn(function()
-	while ScreenGui and ScreenGui.Parent do
-		task.wait(10)
-		if HEXA_IS_VIP and not HEXA_HAS_PERMANENT_ACCESS and HEXA_VIP_EXPIRES_AT > 0 and os.time() >= HEXA_VIP_EXPIRES_AT then
-			setVipState(false)
-		end
-	end
-end)
-
 local VipNotification = Instance.new("Frame")
 VipNotification.Name = "HexaVipNotification"
 VipNotification.AnchorPoint = Vector2.new(0.5, 0)
@@ -833,16 +680,6 @@ Lang.Pairs = {
 	{"ACTIVAR MODO PÁNICO", "ACTIVATE PANIC MODE"},
 	{"PERSONALIZACIÓN", "CUSTOMIZATION"},
 	{"ADMINISTRADOR VIP", "VIP ADMINISTRATOR"},
-	{"TIPO: PERMANENTE", "TYPE: PERMANENT"},
-	{"TIPO: TEMPORAL", "TYPE: TEMPORARY"},
-	{"TIEMPO: PERMANENTE", "TIME: PERMANENT"},
-	{"TIEMPO: 1 HORA", "TIME: 1 HOUR"},
-	{"TIEMPO: 1 DÍA", "TIME: 1 DAY"},
-	{"TIEMPO: 7 DÍAS", "TIME: 7 DAYS"},
-	{"TIEMPO: 2 SEMANAS", "TIME: 2 WEEKS"},
-	{"TIEMPO: 1 MES", "TIME: 1 MONTH"},
-	{"SUBIR", "UP"},
-	{"BAJAR", "DOWN"},
 	{"GENERAR CÓDIGO VIP", "GENERATE VIP CODE"},
 	{"USUARIO DE ROBLOX", "ROBLOX USERNAME"},
 	{"Código VIP copiado", "VIP code copied"},
@@ -1196,7 +1033,7 @@ if HEXA_IS_OWNER then
 	OwnerFrame.Name = "HexaVipOwnerPanel"
 	OwnerFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	OwnerFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-	OwnerFrame.Size = UDim2.fromOffset(430, 410)
+	OwnerFrame.Size = UDim2.new(0, 390, 0, 270)
 	OwnerFrame.BackgroundColor3 = Theme.BG
 	OwnerFrame.BorderSizePixel = 0
 	OwnerFrame.Visible = false
@@ -1205,10 +1042,6 @@ if HEXA_IS_OWNER then
 	mkCorner(OwnerFrame, 16)
 	mkStroke(OwnerFrame, Color3.fromRGB(255, 211, 46), 0.1, 2)
 	makeDraggable(OwnerFrame, OwnerFrame)
-
-	local ownerScale = Instance.new("UIScale")
-	ownerScale.Scale = math.min(1, math.max(0.62, math.min((GUI_VIEWPORT_SIZE.X - 20) / 430, (GUI_VIEWPORT_SIZE.Y - 20) / 410)))
-	ownerScale.Parent = OwnerFrame
 
 	local ownerTitle = Instance.new("TextLabel")
 	ownerTitle.BackgroundTransparency = 1
@@ -1227,9 +1060,9 @@ if HEXA_IS_OWNER then
 
 	local ownerInfo = Instance.new("TextLabel")
 	ownerInfo.BackgroundTransparency = 1
-	ownerInfo.Position = UDim2.new(0, 16, 0, 45)
-	ownerInfo.Size = UDim2.new(1, -32, 0, 32)
-	ownerInfo.Text = "Elige si la clave será temporal o permanente. Cada código funcionará únicamente para el usuario indicado."
+	ownerInfo.Position = UDim2.new(0, 16, 0, 48)
+	ownerInfo.Size = UDim2.new(1, -32, 0, 38)
+	ownerInfo.Text = "Escribe el username exacto. El código generado solo funcionará para esa cuenta."
 	ownerInfo.TextColor3 = Theme.TextMain
 	ownerInfo.TextSize = 11
 	ownerInfo.Font = Enum.Font.GothamMedium
@@ -1239,21 +1072,8 @@ if HEXA_IS_OWNER then
 	ownerInfo.ZIndex = 151
 	ownerInfo.Parent = OwnerFrame
 
-	local ownerType = "PERMANENT"
-	local ownerDurationIndex = 1
-	local ownerDurations = {
-		{label = "1 HORA", seconds = 3600},
-		{label = "1 DÍA", seconds = 86400},
-		{label = "7 DÍAS", seconds = 604800},
-		{label = "2 SEMANAS", seconds = 1209600},
-		{label = "1 MES", seconds = 2592000},
-	}
-
-	local ownerTypeButton = neonButton(OwnerFrame, "TIPO: PERMANENTE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 82), 151)
-	local ownerDurationButton = neonButton(OwnerFrame, "TIEMPO: PERMANENTE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 128), 151)
-
 	local ownerUserBox = Instance.new("TextBox")
-	ownerUserBox.Position = UDim2.new(0, 16, 0, 174)
+	ownerUserBox.Position = UDim2.new(0, 16, 0, 92)
 	ownerUserBox.Size = UDim2.new(1, -32, 0, 40)
 	ownerUserBox.BackgroundColor3 = Theme.Panel2
 	ownerUserBox.BorderSizePixel = 0
@@ -1269,22 +1089,21 @@ if HEXA_IS_OWNER then
 	mkCorner(ownerUserBox, 9)
 	mkStroke(ownerUserBox, Theme.Accent, 0.5, 1)
 
-	local ownerGenerate = neonButton(OwnerFrame, "GENERAR CÓDIGO VIP", UDim2.new(1, -32, 0, 40), UDim2.new(0, 16, 0, 222), 151)
+	local ownerGenerate = neonButton(OwnerFrame, "GENERAR CÓDIGO VIP", UDim2.new(1, -32, 0, 40), UDim2.new(0, 16, 0, 142), 151)
 	ownerGenerate.TextColor3 = Color3.fromRGB(255, 211, 46)
 
 	local ownerCodeBox = Instance.new("TextBox")
-	ownerCodeBox.Position = UDim2.new(0, 16, 0, 270)
-	ownerCodeBox.Size = UDim2.new(1, -32, 0, 46)
+	ownerCodeBox.Position = UDim2.new(0, 16, 0, 192)
+	ownerCodeBox.Size = UDim2.new(1, -32, 0, 40)
 	ownerCodeBox.BackgroundColor3 = Color3.fromRGB(28, 28, 25)
 	ownerCodeBox.BorderSizePixel = 0
 	ownerCodeBox.PlaceholderText = "CÓDIGO VIP"
 	ownerCodeBox.Text = ""
 	ownerCodeBox.TextColor3 = Color3.fromRGB(255, 211, 46)
-	ownerCodeBox.TextSize = 10
+	ownerCodeBox.TextSize = 12
 	ownerCodeBox.Font = Enum.Font.Code
 	ownerCodeBox.ClearTextOnFocus = false
 	ownerCodeBox.TextEditable = false
-	ownerCodeBox.TextWrapped = true
 	ownerCodeBox.ZIndex = 151
 	ownerCodeBox.Parent = OwnerFrame
 	mkCorner(ownerCodeBox, 9)
@@ -1292,47 +1111,26 @@ if HEXA_IS_OWNER then
 
 	local ownerStatus = Instance.new("TextLabel")
 	ownerStatus.BackgroundTransparency = 1
-	ownerStatus.Position = UDim2.new(0, 16, 0, 324)
-	ownerStatus.Size = UDim2.new(1, -32, 0, 70)
+	ownerStatus.Position = UDim2.new(0, 16, 1, -30)
+	ownerStatus.Size = UDim2.new(1, -32, 0, 20)
 	ownerStatus.Text = ""
 	ownerStatus.TextColor3 = Theme.TextMain
 	ownerStatus.TextSize = 11
 	ownerStatus.Font = Enum.Font.GothamMedium
-	ownerStatus.TextWrapped = true
 	ownerStatus.TextXAlignment = Enum.TextXAlignment.Center
-	ownerStatus.TextYAlignment = Enum.TextYAlignment.Top
 	ownerStatus.ZIndex = 151
 	ownerStatus.Parent = OwnerFrame
-
-	local function refreshOwnerPanel()
-		ownerTypeButton.Text = ownerType == "TEMPORARY" and "TIPO: TEMPORAL" or "TIPO: PERMANENTE"
-		ownerDurationButton.Text = ownerType == "TEMPORARY"
-			and ("TIEMPO: " .. ownerDurations[ownerDurationIndex].label)
-			or "TIEMPO: PERMANENTE"
-	end
 
 	OwnerVipButton.MouseButton1Click:Connect(function()
 		OwnerFrame.Visible = not OwnerFrame.Visible
 	end)
 	ownerClose.MouseButton1Click:Connect(function() OwnerFrame.Visible = false end)
-	ownerTypeButton.MouseButton1Click:Connect(function()
-		ownerType = ownerType == "PERMANENT" and "TEMPORARY" or "PERMANENT"
-		ownerStatus.Text = ""
-		refreshOwnerPanel()
-	end)
-	ownerDurationButton.MouseButton1Click:Connect(function()
-		if ownerType ~= "TEMPORARY" then return end
-		ownerDurationIndex = ownerDurationIndex % #ownerDurations + 1
-		ownerStatus.Text = ""
-		refreshOwnerPanel()
-	end)
 	ownerGenerate.MouseButton1Click:Connect(function()
 		local requestedName = normalizeUsername(ownerUserBox.Text)
 		if requestedName == "" then
 			ownerStatus.Text = Lang.Current == "EN" and "Enter a username." or "Escribe un nombre de usuario."
 			return
 		end
-
 		ownerGenerate.Text = Lang.Current == "EN" and "SEARCHING..." or "BUSCANDO..."
 		local ok, userId = pcall(function() return Players:GetUserIdFromNameAsync(requestedName) end)
 		if not ok or not userId then
@@ -1340,26 +1138,16 @@ if HEXA_IS_OWNER then
 			ownerGenerate.Text = "GENERAR CÓDIGO VIP"
 			return
 		end
-
 		local canonicalName = requestedName
 		pcall(function() canonicalName = Players:GetNameFromUserIdAsync(userId) end)
+		local code = generateVipCode(canonicalName, userId)
 		ownerUserBox.Text = canonicalName
-
-		local durationSeconds = ownerType == "TEMPORARY" and ownerDurations[ownerDurationIndex].seconds or 0
-		local code = generateVipCode(userId, durationSeconds)
 		ownerCodeBox.Text = code
 		if type(setclipboard) == "function" then setclipboard(code)
 		elseif type(toclipboard) == "function" then toclipboard(code) end
-
-		local durationText = ownerType == "TEMPORARY" and ownerDurations[ownerDurationIndex].label or "PERMANENTE"
-		if Lang.Current == "EN" then
-			ownerStatus.Text = "VIP code copied for @" .. canonicalName .. ". Duration: " .. durationText .. "."
-		else
-			ownerStatus.Text = "Código VIP copiado para @" .. canonicalName .. ". Duración: " .. durationText .. "."
-		end
+		ownerStatus.Text = (Lang.Current == "EN" and "VIP code copied for @" or "Código VIP copiado para @") .. canonicalName
 		ownerGenerate.Text = "GENERAR CÓDIGO VIP"
 	end)
-	refreshOwnerPanel()
 end
 
 local RestoreOrb = Instance.new("ImageButton")
@@ -1727,7 +1515,6 @@ local function clearFly()
 	if flyConn then flyConn:Disconnect(); flyConn = nil end
 	if flyBV then flyBV:Destroy(); flyBV = nil end
 	if flyBG then flyBG:Destroy(); flyBG = nil end
-	setMobileFlyControlsVisible(false)
 	local _, hum = getCharacterData()
 	if hum then pcall(function() hum.PlatformStand = false end) end
 end
@@ -1755,7 +1542,6 @@ local function ensureFly()
 	hum.PlatformStand = true
 	flyBG = Instance.new("BodyGyro", root); flyBG.P = 9e4; flyBG.MaxTorque = Vector3.new(9e4, 9e4, 9e4); flyBG.CFrame = workspace.CurrentCamera.CFrame
 	flyBV = Instance.new("BodyVelocity", root); flyBV.MaxForce = Vector3.new(9e4, 9e4, 9e4); flyBV.Velocity = Vector3.new(0,0,0)
-	setMobileFlyControlsVisible(MOBILE_DEVICE)
 
 	flyConn = RunService.RenderStepped:Connect(function()
 		local _, hum2, root2 = getCharacterData()
@@ -1765,22 +1551,6 @@ local function ensureFly()
 
 		local move = Vector3.new(0, 0, 0)
 		local look, right = cam.CFrame.LookVector, cam.CFrame.RightVector
-		if MOBILE_DEVICE then
-			local mobileMove = nil
-			if MobileMovementControls then
-				pcall(function() mobileMove = MobileMovementControls:GetMoveVector() end)
-			end
-			if mobileMove and mobileMove.Magnitude > 0.01 then
-				local flatLook = Vector3.new(look.X, 0, look.Z)
-				local flatRight = Vector3.new(right.X, 0, right.Z)
-				if flatLook.Magnitude > 0 then flatLook = flatLook.Unit end
-				if flatRight.Magnitude > 0 then flatRight = flatRight.Unit end
-				move += (flatRight * mobileMove.X) - (flatLook * mobileMove.Z)
-			elseif hum2.MoveDirection.Magnitude > 0.01 then
-				move += hum2.MoveDirection
-			end
-			move += Vector3.new(0, mobileFlyVertical, 0)
-		end
 		if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += look end
 		if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= look end
 		if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= right end
@@ -1954,10 +1724,10 @@ end
 CheckKeyBtn.MouseButton1Click:Connect(function()
 	local entered = tostring(KeyBox.Text or "")
 	local normalKey = entered == "h3xa-ny"
-	local vipCode, vipInfo = validateVipCode(entered, LocalPlayer.Name, LocalPlayer.UserId)
+	local vipCode = isValidVipCode(entered, LocalPlayer.Name, LocalPlayer.UserId)
 	if normalKey or vipCode then
 		if vipCode then
-			setVipState(true, string.upper(entered:gsub("%s+", "")), vipInfo)
+			setVipState(true, string.upper(entered:gsub("%s+", "")))
 			KeyBox.Text = ""
 			KeyBox.PlaceholderText = "¡VIP ACTIVADO!"
 		end
@@ -1965,13 +1735,7 @@ CheckKeyBtn.MouseButton1Click:Connect(function()
 		t.Completed:Connect(openMainInterface)
 	else
 		KeyBox.Text = ""
-		if vipInfo and vipInfo.reason == "EXPIRED" then
-			KeyBox.PlaceholderText = Lang.Current == "EN" and "VIP code expired!" or "¡Código VIP expirado!"
-		elseif vipInfo and vipInfo.reason == "USER" then
-			KeyBox.PlaceholderText = Lang.Current == "EN" and "Code belongs to another user!" or "¡Código de otro usuario!"
-		else
-			KeyBox.PlaceholderText = "¡Clave incorrecta!"
-		end
+		KeyBox.PlaceholderText = "¡Clave incorrecta!"
 		task.delay(1.5, function()
 			KeyBox.PlaceholderText = "Escribe la clave o código VIP..."
 		end)
@@ -3028,25 +2792,18 @@ task.spawn(function()
 			end)
 		end
 
-		function X:getAutoClickPosition()
-			local camera = workspace.CurrentCamera
-			if MOBILE_DEVICE and camera then return camera.ViewportSize / 2 end
-			return UserInputService:GetMouseLocation()
-		end
-
 		function X:performAutoClick()
-			if not MOBILE_DEVICE and type(mouse1click) == "function" then
+			if type(mouse1click) == "function" then
 				pcall(mouse1click)
 				return
 			end
 			local camera = workspace.CurrentCamera
-			local clickPosition = self:getAutoClickPosition()
 			pcall(function()
 				VirtualUser:CaptureController()
-				VirtualUser:Button1Down(clickPosition, camera and camera.CFrame or CFrame.new())
+				VirtualUser:Button1Down(Vector2.new(0, 0), camera and camera.CFrame or CFrame.new())
 				task.defer(function()
 					pcall(function()
-						VirtualUser:Button1Up(clickPosition, camera and camera.CFrame or CFrame.new())
+						VirtualUser:Button1Up(Vector2.new(0, 0), camera and camera.CFrame or CFrame.new())
 					end)
 				end)
 			end)
@@ -3056,8 +2813,8 @@ task.spawn(function()
 			if not self.AutoClicker or not HEXA_IS_VIP then return end
 			local cps = math.clamp(self.AutoClickCps, 1, 60)
 			if now - self.LastAutoClick < (1 / cps) then return end
-			local clickPosition = self:getAutoClickPosition()
-			if self:isPointerOverInterface(clickPosition) then return end
+			local mousePosition = UserInputService:GetMouseLocation()
+			if self:isPointerOverInterface(mousePosition) then return end
 			self.LastAutoClick = now
 			self:performAutoClick()
 		end
@@ -3357,19 +3114,6 @@ task.spawn(function()
 			end)
 		end
 
-		function X:getTeleportTargetFromScreen(position)
-			local camera = workspace.CurrentCamera
-			if not camera then return nil end
-			local ray = camera:ViewportPointToRay(position.X, position.Y)
-			local params = RaycastParams.new()
-			params.FilterType = Enum.RaycastFilterType.Exclude
-			params.FilterDescendantsInstances = LocalPlayer.Character and {LocalPlayer.Character} or {}
-			params.IgnoreWater = false
-			local result = workspace:Raycast(ray.Origin, ray.Direction * 5000, params)
-			if not result then return nil end
-			return CFrame.new(result.Position + Vector3.new(0, 3, 0))
-		end
-
 		function X:isPointerOverInterface(position)
 			local point = Vector2.new(position.X, position.Y)
 			local function contains(guiObject)
@@ -3381,7 +3125,7 @@ task.spawn(function()
 			end
 			return contains(MainFrame) or contains(KeyFrame) or contains(ConfirmFrame)
 				or contains(RestoreOrb) or contains(self.InfoHud) or contains(self.Watermark) or contains(self.InspectorFrame)
-				or contains(OwnerFrame) or contains(VipNotification) or contains(MobileFlyControls)
+				or contains(OwnerFrame) or contains(VipNotification)
 		end
 
 		function X:setupGlobalConnections()
@@ -3401,12 +3145,10 @@ task.spawn(function()
 			end)
 			self:connect(UserInputService.InputBegan, function(input, processed)
 				if processed then return end
-				local pointerInput = input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch
-				if pointerInput and self.MouseTeleport and HEXA_IS_VIP then
+				if input.UserInputType == Enum.UserInputType.MouseButton1 and self.MouseTeleport then
 					if os.clock() >= self.MouseTeleportArmedAt and not self:isPointerOverInterface(input.Position) then
-						local target = self:getTeleportTargetFromScreen(input.Position)
-						if target then self:teleportTo(target) end
+						local mouse = LocalPlayer:GetMouse()
+						if mouse and mouse.Hit then self:teleportTo(mouse.Hit + Vector3.new(0, 3, 0)) end
 					end
 				end
 			end)
@@ -3446,41 +3188,6 @@ task.spawn(function()
 		pcall(function() X:setupInfoHud() end)
 		pcall(function() X:setupMisc() end)
 		pcall(function() X:setupPersonalization() end)
-		addVipStateListener(function(isVip)
-			if isVip then return end
-			X.NoFall = false
-			X.Spectating = false
-			X.MouseTeleport = false
-			X.MouseTeleportArmedAt = 0
-			X.AutoClicker = false
-			X.CrosshairRainbow = false
-			X.CrosshairStyle = "CRUZ"
-			X.CrosshairColorIndex = 1
-			X.CrosshairSize = 14
-			X.CrosshairThickness = 2
-			X.CrosshairGap = 5
-			X.WatermarkIndex = 1
-			X.AnimationIndex = 1
-			X.FontIndex = 1
-			pcall(function() X:toggle(X.NoFallButton, false) end)
-			pcall(function() X:toggle(X.SpectateButton, false) end)
-			pcall(function() X:toggle(X.MouseTeleportButton, false) end)
-			pcall(function() X:toggle(X.AutoClickerButton, false) end)
-			pcall(function() X:toggle(X.CrosshairRainbowButton, false) end)
-			pcall(function() X.CrosshairStyleButton.Text = "TIPO DE MIRA: CRUZ" end)
-			pcall(function() X.CrosshairColorButton.Text = "COLOR DE LA MIRA: BLANCO" end)
-			pcall(function() X.CrosshairSizeSlider.Set(14) end)
-			pcall(function() X.CrosshairThicknessSlider.Set(2) end)
-			pcall(function() X.CrosshairGapSlider.Set(5) end)
-			pcall(function() X.WatermarkButton.Text = "MARCA DE AGUA: ARRIBA DERECHA" end)
-			pcall(function() X.AnimationButton.Text = "ANIMACIÓN DE APERTURA: RETROCESO" end)
-			pcall(function() X.FontButton.Text = "FUENTE: GOTHAM" end)
-			pcall(function() X:updateCrosshair() end)
-			pcall(function() X:restoreCameraSubject() end)
-			pcall(function() X:applyWatermarkPosition() end)
-			pcall(function() X:applyAnimation() end)
-			pcall(function() X:applyFont() end)
-		end)
 		pcall(function() X:setupGlobalConnections() end)
 		Lang.Set(Lang.Current)
 	end)
