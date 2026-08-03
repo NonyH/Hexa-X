@@ -547,7 +547,7 @@ local function sectionTitle(parent: Instance, text: string, pos: UDim2)
 	return lbl
 end
 
-local function createSlider(parent: Instance, title: string, minVal: number, maxVal: number, defaultVal: number, posY: number, onChanged: (number) -> (), vipOnly: boolean?)
+local function createSlider(parent: Instance, title: string, minVal: number, maxVal: number, defaultVal: number, posY: number, onChanged: (number) -> (), vipOnly: boolean?, freeMaximum: number?)
 	local originalMax = maxVal
 	local currentValue = defaultVal
 
@@ -664,14 +664,17 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 
 	local function effectiveMax()
 		if HEXA_IS_VIP then return originalMax end
-		return math.max(minVal, math.min(originalMax, 400))
+		local freeLimit = tonumber(freeMaximum) or 400
+		return math.max(minVal, math.min(originalMax, freeLimit))
 	end
 
 	local controller = {}
 	function controller.Refresh()
 		local allowedMax = effectiveMax()
 		currentValue = math.clamp(currentValue, minVal, allowedMax)
-		local position = math.clamp((currentValue - minVal) / math.max(1, allowedMax - minVal), 0, 1)
+		-- La barra siempre representa el rango completo real. Los usuarios FREE
+		-- pueden verlo entero, aunque el valor aplicado se limite a allowedMax.
+		local position = math.clamp((currentValue - minVal) / math.max(1, originalMax - minVal), 0, 1)
 		local activeSegments = math.floor(position * segmentCount + 0.5)
 		for index, segment in ipairs(segments) do
 			segment.BackgroundTransparency = index <= activeSegments and 0.04 or 0.8
@@ -689,11 +692,25 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	controller.TitleLabel = label
 	table.insert(AllSliders, controller)
 
+	local limitNoticeShown = false
 	local function setFromInput(input: InputObject)
 		if vipOnly and not requireVip() then return end
 		local allowedMax = effectiveMax()
 		local position = math.clamp((input.Position.X - shell.AbsolutePosition.X) / math.max(1, shell.AbsoluteSize.X), 0, 1)
-		currentValue = math.floor(minVal + (allowedMax - minVal) * position + 0.5)
+		local requestedValue = math.floor(minVal + (originalMax - minVal) * position + 0.5)
+
+		if not HEXA_IS_VIP and requestedValue > allowedMax then
+			requestedValue = allowedMax
+			if not limitNoticeShown then
+				limitNoticeShown = true
+				notifyVipLocked(
+					("Solo los usuarios VIP pueden sobrepasar el máximo FREE de %d."):format(math.floor(allowedMax + 0.5)),
+					("Only VIP users can exceed the FREE maximum of %d."):format(math.floor(allowedMax + 0.5))
+				)
+			end
+		end
+
+		currentValue = requestedValue
 		controller.Refresh()
 	end
 
@@ -703,6 +720,7 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 				requireVip()
 				return
 			end
+			limitNoticeShown = false
 			isInteractingWithSlider = true
 			dragging = true
 			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(9, 28)})
@@ -720,6 +738,7 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
+			limitNoticeShown = false
 			isInteractingWithSlider = false
 			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(7, 24)})
 			tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06})
@@ -925,13 +944,13 @@ VipNotificationText.Parent = VipNotification
 VipNotificationText:SetAttribute("HexaNoTranslate", true)
 
 local vipNotificationGeneration = 0
-notifyVipLocked = function()
+notifyVipLocked = function(customTextEs, customTextEn)
 	vipNotificationGeneration += 1
 	local generation = vipNotificationGeneration
 	VipNotificationTitle.Text = Lang.Current == "EN" and "★ VIP FEATURE" or "★ FUNCIÓN VIP"
 	VipNotificationText.Text = Lang.Current == "EN"
-		and "Join the Discord to learn how to obtain VIP."
-		or "Únete al Discord para saber cómo obtener VIP."
+		and (customTextEn or "Join the Discord to learn how to obtain VIP.")
+		or (customTextEs or "Únete al Discord para saber cómo obtener VIP.")
 	tween(VipNotification, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Position = UDim2.new(0.5, 0, 0, 18)
 	})
@@ -959,8 +978,8 @@ Muestra esqueletos o líneas hacia otros jugadores y permite limitar la distanci
 TELETRANSPORTE
 Selecciona un jugador y pulsa IR AL JUGADOR. En computadora puedes usar TP AL RATÓN; en celular se adapta como TP AL TOQUE.
 
-BUSCADOR Y FAVORITOS
-Escribe el nombre de una función para encontrarla. Los usuarios VIP pueden marcar funciones con la estrella y acceder a ellas desde FAVORITOS.
+BUSCADOR
+Escribe el nombre de una función para encontrarla rápidamente.
 
 FUNCIONES VIP
 Las opciones que muestran la etiqueta VIP requieren una clave VIP activa.]], [[AUTO AIM
@@ -978,8 +997,8 @@ Displays skeletons or lines toward other players and lets you limit the distance
 TELEPORT
 Select a player and press GO TO PLAYER. On computer you can use TELEPORT TO MOUSE; on mobile it adapts to TELEPORT TO TOUCH.
 
-SEARCH AND FAVORITES
-Type a feature name to find it. VIP users can mark features with the star and access them from FAVORITES.
+SEARCH
+Type a feature name to find it quickly.
 
 VIP FEATURES
 Options displaying the VIP label require an active VIP key.]]},
@@ -996,7 +1015,6 @@ Options displaying the VIP label require an active VIP key.]]},
 	{"Elige si la clave será temporal o permanente. Cada código funcionará únicamente para el usuario indicado.", "Choose whether the key will be temporary or permanent. Each code will work only for the specified user."},
 	{"EQUIPAR HERRAMIENTA AUTOMÁTICAMENTE", "AUTO EQUIP TOOL"},
 	{"TELETRANSPORTARSE AL RATÓN", "TELEPORT TO MOUSE"},
-	{"AUTOCLICKER", "AUTOCLICKER"},
 	{"Clics por segundo", "Clicks per second"},
 	{"VOLVER A LA POSICIÓN GUARDADA", "RETURN TO SAVED POSITION"},
 	{"PUNTERÍA AUTOMÁTICA (CABEZA)", "AUTO AIM (HEAD)"},
@@ -1043,6 +1061,30 @@ Options displaying the VIP label require an active VIP key.]]},
 	{"SALTO ALTO", "HIGH JUMP"},
 	{"SIN COLISIÓN", "NOCLIP"},
 	{"COMBATE Y PUNTERÍA", "COMBAT AND AIM"},
+	{"COMBATE AVANZADO", "ADVANCED COMBAT"},
+	{"TRIGGER BOT", "TRIGGER BOT"},
+	{"WALL CHECK", "WALL CHECK"},
+	{"COMPROBAR EQUIPOS", "TEAM CHECK"},
+	{"SIN RETROCESO", "NO RECOIL"},
+	{"DISPARO RÁPIDO", "RAPID FIRE"},
+	{"FUNCIONES ESENCIALES", "ESSENTIAL FEATURES"},
+	{"HITBOX EXTENDER", "HITBOX EXTENDER"},
+	{"Tamaño de Hitbox", "Hitbox size"},
+	{"INSTANT HIT", "INSTANT HIT"},
+	{"MODO JESÚS (CAMINAR SOBRE AGUA)", "JESUS MODE (WALK ON WATER)"},
+	{"CÁMARA, VEHÍCULOS Y ESTADOS", "CAMERA, VEHICLES AND STATES"},
+	{"VELOCIDAD DE VEHÍCULOS", "VEHICLE SPEED"},
+	{"Multiplicador del vehículo", "Vehicle multiplier"},
+	{"CÁMARA LIBRE", "FREE CAMERA"},
+	{"Velocidad de la cámara libre", "Free camera speed"},
+	{"SPIN", "SPIN"},
+	{"Velocidad del Spin", "Spin speed"},
+	{"ANTI ATURDIMIENTO", "ANTI STUN"},
+	{"ANTI RAGDOLL", "ANTI RAGDOLL"},
+	{"ESP AVANZADO", "ADVANCED ESP"},
+	{"CAJA ESP", "BOX ESP"},
+	{"NOMBRE ESP", "NAME ESP"},
+	{"BARRA DE VIDA ESP", "HEALTH BAR ESP"},
 	{"IGNORAR AMIGOS", "IGNORE FRIENDS"},
 	{"USAR CÍRCULO FOV", "USE FOV CIRCLE"},
 	{"Radio del FOV", "FOV radius"},
@@ -1066,6 +1108,12 @@ Options displaying the VIP label require an active VIP key.]]},
 	{"HORA:", "TIME:"},
 	{"VELOCIDAD:", "SPEED:"},
 	{"NO DISP.", "UNAVAILABLE"},
+	{"SEGURIDAD Y CONTROL", "SAFETY AND CONTROL"},
+	{"AUTOMATIZACIÓN", "AUTOMATION"},
+	{"SISTEMA Y UTILIDADES", "SYSTEM AND UTILITIES"},
+	{"CÁMARA Y MOVIMIENTO", "CAMERA AND MOVEMENT"},
+	{"VEHÍCULOS", "VEHICLES"},
+	{"PROTECCIÓN DEL PERSONAJE", "PLAYER PROTECTION"},
 	{"MISCELÁNEO", "MISCELLANEOUS"},
 	{"ANTI AUSENCIA (AFK)", "ANTI AFK"},
 	{"MODO RENDIMIENTO: CARTÓN", "PERFORMANCE MODE: POTATO"},
@@ -1969,44 +2017,10 @@ refreshFavoritesCard = function()
 end
 
 registerFunctionButton = function(button)
-	if not button:IsA("TextButton") or button:GetAttribute("HexaNoFavorite") == true then return end
-	if not button:IsDescendantOf(Content) or button:IsDescendantOf(FavoritesCard) then return end
-	if button:FindFirstAncestor("HexaPlayerDropdown") then return end
-	local parentScrolling = button:FindFirstAncestorOfClass("ScrollingFrame")
-	if parentScrolling and parentScrolling ~= Content then return end
-	local id = getFavoriteId(button)
-	if id == "" or FavoriteRegistry[id] then return end
-	local card = getCardForButton(button)
-	FavoriteRegistry[id] = {Button = button, Card = card}
-	local star = Instance.new("TextButton")
-	star.Name = "HexaFavoriteStar"
-	star.AnchorPoint = Vector2.new(1, 0.5)
-	local starOffset = -8
-	if button:GetAttribute("HexaVipOnly") == true then
-		starOffset = -116
-	elseif button:GetAttribute("IsToggle") == true then
-		starOffset = -76
+	-- Favoritos deshabilitados: no crear estrellas ni accesos directos.
+	if button and button:IsA("TextButton") then
+		button:SetAttribute("HexaNoFavorite", true)
 	end
-	star.Position = UDim2.new(1, starOffset, 0.5, 0)
-	star.Size = UDim2.fromOffset(24, 24)
-	star.BackgroundTransparency = 1
-	star.Text = FavoriteIds[id] and "★" or "☆"
-	star.TextColor3 = FavoriteIds[id] and Theme.VipGold or Color3.fromRGB(125, 125, 125)
-	star.TextSize = 18
-	star.Font = Enum.Font.GothamBold
-	star.AutoButtonColor = false
-	star.ZIndex = math.max(button.ZIndex + 8, 12)
-	star.Visible = HEXA_IS_VIP
-	star.Parent = button
-	star:SetAttribute("HexaNoTranslate", true)
-	FavoriteStars[id] = star
-	star.MouseButton1Click:Connect(function()
-		if not HEXA_IS_VIP then requireVip(); return end
-		FavoriteIds[id] = not FavoriteIds[id]
-		if not FavoriteIds[id] then FavoriteIds[id] = nil end
-		saveFavorites()
-		refreshFavoritesCard()
-	end)
 end
 
 registerAllFunctionButtons = function()
@@ -2435,8 +2449,8 @@ Muestra esqueletos o líneas hacia otros jugadores y permite limitar la distanci
 TELETRANSPORTE
 Selecciona un jugador y pulsa IR AL JUGADOR. En computadora puedes usar TP AL RATÓN; en celular se adapta como TP AL TOQUE.
 
-BUSCADOR Y FAVORITOS
-Escribe el nombre de una función para encontrarla. Los usuarios VIP pueden marcar funciones con la estrella y acceder a ellas desde FAVORITOS.
+BUSCADOR
+Escribe el nombre de una función para encontrarla rápidamente.
 
 FUNCIONES VIP
 Las opciones que muestran la etiqueta VIP requieren una clave VIP activa.]]
@@ -2560,53 +2574,128 @@ local function isKeyActive(targetKey: any): boolean
 	return true
 end
 
-local function getClosestPlayer(): Player?
+local HexaSharedTargetFilters = {
+	TeamCheck = true,
+	WallCheck = true,
+	Listeners = {},
+}
+
+local function passesTeamCheck(player: Player): boolean
+	-- Nunca permitir que una función dirigida a otros jugadores seleccione al usuario local.
+	if not player or player == LocalPlayer or player.Parent ~= Players then return false end
+	if not HexaSharedTargetFilters.TeamCheck then return true end
+
+	-- Los objetos Team son la comprobación principal, incluso si el juego usa Neutral.
+	local localTeam = LocalPlayer.Team
+	local targetTeam = player.Team
+	if localTeam ~= nil and targetTeam ~= nil then
+		return targetTeam ~= localTeam
+	end
+
+	-- Respaldo para juegos que solamente configuran TeamColor.
+	if not LocalPlayer.Neutral and not player.Neutral then
+		local localColor = LocalPlayer.TeamColor
+		local targetColor = player.TeamColor
+		if localColor ~= nil and targetColor ~= nil and localColor == targetColor then
+			return false
+		end
+	end
+
+	return true
+end
+
+function HexaSharedTargetFilters:AllowsPlayer(player: Player?, requireAlive: boolean?): boolean
+	if not passesTeamCheck(player) then return false end
+	if requireAlive == false then return true end
+	local character = player and player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	return character ~= nil and humanoid ~= nil and root ~= nil and humanoid.Health > 0
+end
+
+function HexaSharedTargetFilters:AddListener(callback)
+	if type(callback) == "function" then table.insert(self.Listeners, callback) end
+end
+
+function HexaSharedTargetFilters:SetTeamCheck(enabled: boolean)
+	self.TeamCheck = enabled == true
+	for _, callback in ipairs(self.Listeners) do
+		pcall(callback, self.TeamCheck)
+	end
+end
+
+local function passesWallCheck(part: BasePart?): boolean
+	if not HexaSharedTargetFilters.WallCheck then return true end
+	if not part or not part.Parent then return false end
+	local camera = workspace.CurrentCamera
+	if not camera then return false end
+	local origin = camera.CFrame.Position
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local excluded = {camera}
+	if LocalPlayer.Character then table.insert(excluded, LocalPlayer.Character) end
+	params.FilterDescendantsInstances = excluded
+	params.IgnoreWater = true
+	local result = workspace:Raycast(origin, part.Position - origin, params)
+	return result == nil or result.Instance:IsDescendantOf(part.Parent)
+end
+
+local function getClosestPlayer(aimAtHead: boolean?): Player?
 	local closestPlayer: Player? = nil
 	local shortestDistance3D = maxAimDistance
 	local shortestDistance2D = math.huge
-	
+
 	local _, _, root = getCharacterData()
 	if not root then return nil end
 	local cam = workspace.CurrentCamera
+	if not cam then return nil end
 	local viewportCenter = cam.ViewportSize / 2
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer and player.Character then
-			if ignoreFriendsActive then
-				local isFriend = false
-				pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
-				if isFriend then continue end
-			end
+		if not HexaSharedTargetFilters:AllowsPlayer(player, true) then continue end
 
-			local hum = player.Character:FindFirstChildOfClass("Humanoid")
-			local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
-			
-			if hum and hum.Health > 0 and targetRoot then
-				local dist3D = (root.Position - targetRoot.Position).Magnitude
-				
-				if dist3D <= maxAimDistance then
-					if fovActive then
-						local targetPart = (autoAimHeadActive and player.Character:FindFirstChild("Head")) or targetRoot
-						if not targetPart then continue end
+		if ignoreFriendsActive then
+			local isFriend = false
+			pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
+			if isFriend then continue end
+		end
 
-						local screenPos, onScreen = cam:WorldToViewportPoint(targetPart.Position)
-						if onScreen then
-							local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
-							if dist2D <= fovRadius and dist2D < shortestDistance2D then
-								shortestDistance2D = dist2D
-								closestPlayer = player
-							end
-						end
-					else
-						if dist3D <= shortestDistance3D then
-							shortestDistance3D = dist3D
-							closestPlayer = player
-						end
-					end
+		local character = player.Character
+		local hum = character:FindFirstChildOfClass("Humanoid")
+		local targetRoot = character:FindFirstChild("HumanoidRootPart")
+		if not hum or hum.Health <= 0 or not targetRoot then continue end
+
+		-- Body mode now chooses torso parts explicitly instead of relying on the head toggle.
+		local targetPart
+		if aimAtHead then
+			targetPart = character:FindFirstChild("Head") or targetRoot
+		else
+			targetPart = character:FindFirstChild("UpperTorso")
+				or character:FindFirstChild("Torso")
+				or character:FindFirstChild("LowerTorso")
+				or targetRoot
+		end
+		if not targetPart or not targetPart:IsA("BasePart") then continue end
+		if not passesWallCheck(targetPart) then continue end
+
+		local dist3D = (root.Position - targetRoot.Position).Magnitude
+		if dist3D > maxAimDistance then continue end
+
+		if fovActive then
+			local screenPos, onScreen = cam:WorldToViewportPoint(targetPart.Position)
+			if onScreen and screenPos.Z > 0 then
+				local dist2D = (Vector2.new(screenPos.X, screenPos.Y) - viewportCenter).Magnitude
+				if dist2D <= fovRadius and dist2D < shortestDistance2D then
+					shortestDistance2D = dist2D
+					closestPlayer = player
 				end
 			end
+		elseif dist3D < shortestDistance3D then
+			shortestDistance3D = dist3D
+			closestPlayer = player
 		end
 	end
+
 	return closestPlayer
 end
 
@@ -2682,7 +2771,7 @@ end
 local function rebuildPlayerList()
 	for _, child in ipairs(DropdownList:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
+		if HexaSharedTargetFilters:AllowsPlayer(player, false) then
 			local item = Instance.new("TextButton")
 			item.Size = UDim2.new(1, 0, 0, 32)
 			item.BackgroundColor3 = Theme.Panel2
@@ -2695,11 +2784,19 @@ local function rebuildPlayerList()
 			item.Parent = DropdownList
 			mkCorner(item, 10); mkStroke(item, Theme.Accent, 0.7, 1); addHover(item, Theme.Panel2, Theme.Accent2, Theme.Active)
 			item.MouseButton1Click:Connect(function()
+				if not HexaSharedTargetFilters:AllowsPlayer(player, false) then return end
 				selectedTargetPlayer = player; DropdownButton.Text = "  Jugador: " .. player.Name; DropdownList.Visible = false
 			end)
 		end
 	end
 end
+HexaSharedTargetFilters:AddListener(function()
+	rebuildPlayerList()
+	if selectedTargetPlayer and not HexaSharedTargetFilters:AllowsPlayer(selectedTargetPlayer, false) then
+		selectedTargetPlayer = nil
+		DropdownButton.Text = "  Seleccionar jugador: [ninguno]"
+	end
+end)
 Players.PlayerAdded:Connect(rebuildPlayerList)
 Players.PlayerRemoving:Connect(function(player)
 	if selectedTargetPlayer == player then selectedTargetPlayer = nil; DropdownButton.Text = "  Seleccionar jugador: [ninguno]" end
@@ -2725,9 +2822,1244 @@ fovButton.MouseButton1Click:Connect(function() fovActive = not fovActive; setAct
 espSkeletonButton.MouseButton1Click:Connect(function() espSkeletonActive = not espSkeletonActive; setActive(espSkeletonButton, espSkeletonActive) end)
 espLinesButton.MouseButton1Click:Connect(function() espLinesActive = not espLinesActive; setActive(espLinesButton, espLinesActive) end)
 
+
+-- ================================================================
+-- FUNCIONES ADICIONALES HEXA X
+-- Aisladas en una función propia para no superar el límite de
+-- variables locales de la función principal.
+-- ================================================================
+task.spawn(function()
+	local moduleOk, moduleError = xpcall(function()
+		local Settings = {
+			TriggerBot = false,
+			WallCheck = HexaSharedTargetFilters.WallCheck,
+			TeamCheck = HexaSharedTargetFilters.TeamCheck,
+			NoRecoil = false,
+			RapidFire = false,
+			VehicleSpeed = false,
+			VehicleMultiplier = 3,
+			DroneCamera = false,
+			DroneSpeed = 50,
+			Spin = false,
+			SpinSpeed = 120,
+			AntiStun = false,
+			AntiRagdoll = false,
+			BoxESP = false,
+			NameESP = false,
+			HealthESP = false,
+		}
+
+		local State = {
+			Dead = false,
+			LastTrigger = 0,
+			LastWeaponScan = 0,
+			LastRapidShot = 0,
+			LastEspRender = 0,
+			Connections = {},
+			EspCache = {},
+			NoRecoilValues = setmetatable({}, {__mode = "k"}),
+			NoRecoilAttributes = setmetatable({}, {__mode = "k"}),
+			RapidValues = setmetatable({}, {__mode = "k"}),
+			RapidAttributes = setmetatable({}, {__mode = "k"}),
+			VehicleCache = setmetatable({}, {__mode = "k"}),
+			Drone = {
+				Active = false,
+				SavedType = nil,
+				SavedSubject = nil,
+				Position = Vector3.new(),
+				Pitch = 0,
+				Yaw = 0,
+				LookTouch = nil,
+				LastTouch = nil,
+				Vertical = 0,
+				VerticalInput = nil,
+				MouseLook = false,
+				LookDelta = Vector2.zero,
+				SavedMouseBehavior = nil,
+				SavedMouseIconEnabled = nil,
+			},
+			CharacterControl = {
+				Character = nil,
+				Humanoid = nil,
+				Root = nil,
+				WalkSpeed = nil,
+				JumpPower = nil,
+				JumpHeight = nil,
+				UseJumpPower = nil,
+				AutoRotate = nil,
+				RootAnchored = nil,
+			},
+		}
+
+		local function connect(signal, callback)
+			local connection = signal:Connect(callback)
+			table.insert(State.Connections, connection)
+			return connection
+		end
+
+		local function containsAny(textValue, patterns)
+			local lowered = string.lower(tostring(textValue or ""))
+			for _, pattern in ipairs(patterns) do
+				if string.find(lowered, pattern, 1, true) then
+					return true
+				end
+			end
+			return false
+		end
+
+		local CombatAdvancedCard = sectionCard(282)
+		CombatAdvancedCard.LayoutOrder = 21
+		sectionTitle(CombatAdvancedCard, "COMBATE AVANZADO", UDim2.new(0, 16, 0, 14))
+		local TriggerButton = createToggleButton(CombatAdvancedCard, "TRIGGER BOT", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		local WallButton = createToggleButton(CombatAdvancedCard, "WALL CHECK", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+		local TeamButton = createToggleButton(CombatAdvancedCard, "COMPROBAR EQUIPOS", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
+		local NoRecoilButton = createToggleButton(CombatAdvancedCard, "SIN RETROCESO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 182))
+		markVipControl(NoRecoilButton)
+		local RapidButton = createToggleButton(CombatAdvancedCard, "DISPARO RÁPIDO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 228))
+		markVipControl(RapidButton)
+
+		local EspAdvancedCard = sectionCard(184)
+		EspAdvancedCard.LayoutOrder = 31
+		sectionTitle(EspAdvancedCard, "ESP AVANZADO", UDim2.new(0, 16, 0, 14))
+		local BoxButton = createToggleButton(EspAdvancedCard, "CAJA ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		local NameButton = createToggleButton(EspAdvancedCard, "NOMBRE ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+		local HealthButton = createToggleButton(EspAdvancedCard, "BARRA DE VIDA ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
+
+		local CameraMovementCard = sectionCard(264)
+		CameraMovementCard.LayoutOrder = 34
+		sectionTitle(CameraMovementCard, "CÁMARA Y MOVIMIENTO", UDim2.new(0, 16, 0, 14))
+		local DroneButton = createToggleButton(CameraMovementCard, "CÁMARA LIBRE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		markVipControl(DroneButton)
+		createSlider(CameraMovementCard, "Velocidad de la cámara libre", 10, 300, Settings.DroneSpeed, 90, function(value)
+			Settings.DroneSpeed = value
+		end, true)
+		local SpinButton = createToggleButton(CameraMovementCard, "SPIN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 150))
+		createSlider(CameraMovementCard, "Velocidad del Spin", 10, 400, Settings.SpinSpeed, 196, function(value)
+			Settings.SpinSpeed = value
+		end)
+
+		local VehicleCard = sectionCard(158)
+		VehicleCard.LayoutOrder = 35
+		sectionTitle(VehicleCard, "VEHÍCULOS", UDim2.new(0, 16, 0, 14))
+		local VehicleButton = createToggleButton(VehicleCard, "VELOCIDAD DE VEHÍCULOS", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		createSlider(VehicleCard, "Multiplicador del vehículo", 1, 10, Settings.VehicleMultiplier, 90, function(value)
+			Settings.VehicleMultiplier = value
+		end)
+
+		local ProtectionCard = sectionCard(140)
+		ProtectionCard.LayoutOrder = 36
+		sectionTitle(ProtectionCard, "PROTECCIÓN DEL PERSONAJE", UDim2.new(0, 16, 0, 14))
+		local AntiStunButton = createToggleButton(ProtectionCard, "ANTI ATURDIMIENTO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		local AntiRagdollButton = createToggleButton(ProtectionCard, "ANTI RAGDOLL", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+
+		local Buttons = {
+			TriggerBot = TriggerButton,
+			WallCheck = WallButton,
+			TeamCheck = TeamButton,
+			NoRecoil = NoRecoilButton,
+			RapidFire = RapidButton,
+			VehicleSpeed = VehicleButton,
+			DroneCamera = DroneButton,
+			Spin = SpinButton,
+			AntiStun = AntiStunButton,
+			AntiRagdoll = AntiRagdollButton,
+			BoxESP = BoxButton,
+			NameESP = NameButton,
+			HealthESP = HealthButton,
+		}
+
+		local EspLayer = Instance.new("Frame")
+		EspLayer.Name = "HexaAdvancedEspLayer"
+		EspLayer.BackgroundTransparency = 1
+		EspLayer.BorderSizePixel = 0
+		EspLayer.Position = UDim2.fromScale(0, 0)
+		EspLayer.Size = UDim2.fromScale(1, 1)
+		EspLayer.ClipsDescendants = false
+		EspLayer.Active = false
+		EspLayer.ZIndex = 2
+		EspLayer.Parent = ScreenGui
+
+		local MobileDroneControls = nil
+		if MOBILE_DEVICE then
+			MobileDroneControls = Instance.new("Frame")
+			MobileDroneControls.Name = "HexaAdvancedDroneControls"
+			MobileDroneControls.AnchorPoint = Vector2.new(1, 0.5)
+			MobileDroneControls.Position = UDim2.new(1, -14, 0.5, -42)
+			MobileDroneControls.Size = UDim2.fromOffset(92, 96)
+			MobileDroneControls.BackgroundTransparency = 1
+			MobileDroneControls.Visible = false
+			MobileDroneControls.ZIndex = 130
+			MobileDroneControls.Parent = ScreenGui
+
+			local DroneUp = neonButton(MobileDroneControls, "SUBIR", UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 0, 0), 131)
+			local DroneDown = neonButton(MobileDroneControls, "BAJAR", UDim2.new(1, 0, 0, 42), UDim2.new(0, 0, 1, -42), 131)
+			DroneUp:SetAttribute("HexaNoFavorite", true)
+			DroneDown:SetAttribute("HexaNoFavorite", true)
+
+			local function bindVertical(button, direction)
+				connect(button.InputBegan, function(input)
+					if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+						State.Drone.VerticalInput = input
+						State.Drone.Vertical = direction
+					end
+				end)
+				connect(button.InputEnded, function(input)
+					if State.Drone.VerticalInput == input then
+						State.Drone.VerticalInput = nil
+						State.Drone.Vertical = 0
+					end
+				end)
+			end
+			bindVertical(DroneUp, 1)
+			bindVertical(DroneDown, -1)
+		end
+
+		local function getLocalCharacter()
+			local character = LocalPlayer.Character
+			if not character then return nil, nil, nil end
+			return character, character:FindFirstChildOfClass("Humanoid"), character:FindFirstChild("HumanoidRootPart")
+		end
+
+		local function releaseCharacterControl()
+			local control = State.CharacterControl
+			if control.Humanoid and control.Humanoid.Parent then
+				pcall(function()
+					if control.WalkSpeed ~= nil then control.Humanoid.WalkSpeed = control.WalkSpeed end
+					if control.UseJumpPower ~= nil then control.Humanoid.UseJumpPower = control.UseJumpPower end
+					if control.JumpPower ~= nil then control.Humanoid.JumpPower = control.JumpPower end
+					if control.JumpHeight ~= nil then control.Humanoid.JumpHeight = control.JumpHeight end
+					if control.AutoRotate ~= nil then control.Humanoid.AutoRotate = control.AutoRotate end
+				end)
+			end
+			if control.Root and control.Root.Parent and control.RootAnchored ~= nil then
+				pcall(function() control.Root.Anchored = control.RootAnchored end)
+			end
+			State.CharacterControl = {
+				Character = nil,
+				Humanoid = nil,
+				Root = nil,
+				WalkSpeed = nil,
+				JumpPower = nil,
+				JumpHeight = nil,
+				UseJumpPower = nil,
+				AutoRotate = nil,
+				RootAnchored = nil,
+			}
+		end
+
+		local function ensureCharacterControl()
+			local character, humanoid, root = getLocalCharacter()
+			if not character or not humanoid or not root then return nil end
+			local control = State.CharacterControl
+			if control.Character ~= character then
+				releaseCharacterControl()
+				control = State.CharacterControl
+				control.Character = character
+				control.Humanoid = humanoid
+				control.Root = root
+				control.WalkSpeed = humanoid.WalkSpeed
+				control.JumpPower = humanoid.JumpPower
+				control.JumpHeight = humanoid.JumpHeight
+				control.UseJumpPower = humanoid.UseJumpPower
+				control.AutoRotate = humanoid.AutoRotate
+				control.RootAnchored = root.Anchored
+			end
+			return control
+		end
+
+		local function applyCharacterControl()
+			if not Settings.DroneCamera and not Settings.Spin then
+				releaseCharacterControl()
+				return
+			end
+			local control = ensureCharacterControl()
+			if not control then return end
+			if Settings.DroneCamera then
+				pcall(function()
+					control.Humanoid.WalkSpeed = 0
+					control.Humanoid.AutoRotate = false
+					if control.Humanoid.UseJumpPower then
+						control.Humanoid.JumpPower = 0
+					else
+						control.Humanoid.JumpHeight = 0
+					end
+					control.Root.Anchored = true
+					control.Root.AssemblyLinearVelocity = Vector3.zero
+					control.Root.AssemblyAngularVelocity = Vector3.zero
+				end)
+			else
+				pcall(function()
+					control.Root.Anchored = control.RootAnchored == true
+					if control.WalkSpeed ~= nil then control.Humanoid.WalkSpeed = control.WalkSpeed end
+					if control.UseJumpPower ~= nil then control.Humanoid.UseJumpPower = control.UseJumpPower end
+					if control.JumpPower ~= nil then control.Humanoid.JumpPower = control.JumpPower end
+					if control.JumpHeight ~= nil then control.Humanoid.JumpHeight = control.JumpHeight end
+					control.Humanoid.AutoRotate = false
+				end)
+			end
+		end
+
+		local function isValidPlayer(player)
+			return HexaSharedTargetFilters:AllowsPlayer(player, true)
+		end
+
+		local function isVisible(part)
+			if not HexaSharedTargetFilters.WallCheck then return true end
+			local camera = workspace.CurrentCamera
+			if not camera or not part or not part.Parent then return false end
+			local origin = camera.CFrame.Position
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			local excluded = {camera}
+			if LocalPlayer.Character then table.insert(excluded, LocalPlayer.Character) end
+			params.FilterDescendantsInstances = excluded
+			params.IgnoreWater = true
+			local result = workspace:Raycast(origin, part.Position - origin, params)
+			return result == nil or result.Instance:IsDescendantOf(part.Parent)
+		end
+
+		-- Disable any Silent Aim hook left by an older Hexa X execution in this Roblox session.
+		pcall(function()
+			_G.HexaXSilentTarget = nil
+			if type(getgenv) == "function" then
+				local environment = getgenv()
+				local oldState = rawget(environment, "__HexaXStableSilentAimHook")
+				if type(oldState) == "table" then
+					oldState.Enabled = false
+					oldState.Target = nil
+				end
+				environment.HexaXSilentTarget = nil
+			end
+		end)
+
+		local function cacheValue(cache, object, newValue)
+			if cache[object] == nil then cache[object] = object.Value end
+			pcall(function() object.Value = newValue end)
+		end
+
+		local function cacheAttribute(cache, object, attributeName, originalValue, newValue)
+			local attributes = cache[object]
+			if not attributes then
+				attributes = {}
+				cache[object] = attributes
+			end
+			if attributes[attributeName] == nil then attributes[attributeName] = originalValue end
+			pcall(function() object:SetAttribute(attributeName, newValue) end)
+		end
+
+		local function restoreValues(cache)
+			for object, value in pairs(cache) do
+				if object and object.Parent then pcall(function() object.Value = value end) end
+			end
+			table.clear(cache)
+		end
+
+		local function restoreAttributes(cache)
+			for object, attributes in pairs(cache) do
+				if object and object.Parent then
+					for attributeName, value in pairs(attributes) do
+						pcall(function() object:SetAttribute(attributeName, value) end)
+					end
+				end
+			end
+			table.clear(cache)
+		end
+
+		local function restoreWeapons()
+			restoreValues(State.NoRecoilValues)
+			restoreAttributes(State.NoRecoilAttributes)
+			restoreValues(State.RapidValues)
+			restoreAttributes(State.RapidAttributes)
+		end
+
+		local function updateWeapons(now)
+			if now - State.LastWeaponScan < 0.12 then return end
+			State.LastWeaponScan = now
+			local character = LocalPlayer.Character
+			local tool = character and character:FindFirstChildOfClass("Tool")
+			if not tool then return end
+			local objects = {tool}
+			for _, descendant in ipairs(tool:GetDescendants()) do table.insert(objects, descendant) end
+			for _, object in ipairs(objects) do
+				local objectName = string.lower(object.Name)
+				if object:IsA("NumberValue") or object:IsA("IntValue") then
+					if Settings.NoRecoil and containsAny(objectName, {"recoil", "kick", "spread", "bloom", "shake"}) then
+						cacheValue(State.NoRecoilValues, object, 0)
+					end
+					if Settings.RapidFire then
+						if containsAny(objectName, {"cooldown", "delay", "interval", "wait", "firetime"}) then
+							cacheValue(State.RapidValues, object, 0)
+						elseif containsAny(objectName, {"firerate", "fire_rate", "rateoffire", "rpm"}) then
+							cacheValue(State.RapidValues, object, math.max(1000, tonumber(object.Value) or 0))
+						end
+					end
+				end
+				for attributeName, attributeValue in pairs(object:GetAttributes()) do
+					if type(attributeValue) == "number" then
+						local lowered = string.lower(attributeName)
+						if Settings.NoRecoil and containsAny(lowered, {"recoil", "kick", "spread", "bloom", "shake"}) then
+							cacheAttribute(State.NoRecoilAttributes, object, attributeName, attributeValue, 0)
+						end
+						if Settings.RapidFire then
+							if containsAny(lowered, {"cooldown", "delay", "interval", "wait", "firetime"}) then
+								cacheAttribute(State.RapidAttributes, object, attributeName, attributeValue, 0)
+							elseif containsAny(lowered, {"firerate", "fire_rate", "rateoffire", "rpm"}) then
+								cacheAttribute(State.RapidAttributes, object, attributeName, attributeValue, math.max(1000, attributeValue))
+							end
+						end
+					end
+				end
+			end
+			if Settings.RapidFire and not MOBILE_DEVICE and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and now - State.LastRapidShot >= 0.045 then
+				State.LastRapidShot = now
+				pcall(function() tool:Activate() end)
+			end
+		end
+
+		local function restoreVehicle()
+			for seat, original in pairs(State.VehicleCache) do
+				if seat and seat.Parent then
+					pcall(function() seat.MaxSpeed = original.MaxSpeed end)
+					pcall(function() seat.Torque = original.Torque end)
+				end
+			end
+			table.clear(State.VehicleCache)
+		end
+
+		local function updateVehicle()
+			local _, humanoid = getLocalCharacter()
+			local seat = humanoid and humanoid.SeatPart
+			if not seat or not seat:IsA("VehicleSeat") then return end
+			local original = State.VehicleCache[seat]
+			if not original then
+				original = {MaxSpeed = seat.MaxSpeed, Torque = seat.Torque}
+				State.VehicleCache[seat] = original
+			end
+			local multiplier = math.max(1, Settings.VehicleMultiplier)
+			pcall(function() seat.MaxSpeed = math.max(original.MaxSpeed, original.MaxSpeed * multiplier) end)
+			pcall(function() seat.Torque = math.max(original.Torque, original.Torque * multiplier) end)
+			local root = seat.AssemblyRootPart or seat
+			local velocity = root.AssemblyLinearVelocity
+			local speed = velocity.Magnitude
+			local limit = math.max(40, math.max(original.MaxSpeed, 40) * multiplier)
+			if math.abs(seat.ThrottleFloat) > 0.01 and speed > 0.5 and speed < limit then
+				local scale = math.min(1.03, limit / math.max(speed, 0.1))
+				pcall(function() root.AssemblyLinearVelocity = velocity * scale end)
+			end
+		end
+
+		local function showDroneControls(visible)
+			State.Drone.Vertical = 0
+			State.Drone.VerticalInput = nil
+			if MobileDroneControls then MobileDroneControls.Visible = visible == true end
+		end
+
+		local function setDesktopDroneLook(enabled)
+			if MOBILE_DEVICE then return end
+			if enabled then
+				if not State.Drone.MouseLook then
+					State.Drone.SavedMouseBehavior = UserInputService.MouseBehavior
+					State.Drone.SavedMouseIconEnabled = UserInputService.MouseIconEnabled
+				end
+				State.Drone.MouseLook = true
+				pcall(function() UserInputService.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end)
+				pcall(function() UserInputService.MouseIconEnabled = false end)
+			else
+				State.Drone.MouseLook = false
+				State.Drone.LookDelta = Vector2.zero
+				local savedBehavior = State.Drone.SavedMouseBehavior
+				local savedIcon = State.Drone.SavedMouseIconEnabled
+				State.Drone.SavedMouseBehavior = nil
+				State.Drone.SavedMouseIconEnabled = nil
+				pcall(function()
+					UserInputService.MouseBehavior = savedBehavior or Enum.MouseBehavior.Default
+				end)
+				if savedIcon ~= nil then
+					pcall(function() UserInputService.MouseIconEnabled = savedIcon end)
+				else
+					pcall(function() UserInputService.MouseIconEnabled = true end)
+				end
+			end
+		end
+
+		local function startDrone()
+			if State.Drone.Active then
+				applyCharacterControl()
+				return
+			end
+			local camera = workspace.CurrentCamera
+			if not camera then return end
+			State.Drone.Active = true
+			State.Drone.SavedType = camera.CameraType
+			State.Drone.SavedSubject = camera.CameraSubject
+			State.Drone.Position = camera.CFrame.Position
+			State.Drone.LookDelta = Vector2.zero
+			local pitch, yaw = camera.CFrame:ToOrientation()
+			State.Drone.Pitch = pitch
+			State.Drone.Yaw = yaw
+			camera.CameraType = Enum.CameraType.Scriptable
+			applyCharacterControl()
+			showDroneControls(MOBILE_DEVICE)
+			autoAimHeadActive = false
+			autoAimBodyActive = false
+			setActive(autoAimHeadButton, false)
+			setActive(autoAimBodyButton, false)
+			AimHighlight.Adornee = nil
+		end
+
+		local function stopDrone()
+			showDroneControls(false)
+			setDesktopDroneLook(false)
+			if not State.Drone.Active then
+				applyCharacterControl()
+				return
+			end
+			State.Drone.Active = false
+			State.Drone.LookTouch = nil
+			State.Drone.LastTouch = nil
+			State.Drone.LookDelta = Vector2.zero
+			local camera = workspace.CurrentCamera
+			if camera then
+				pcall(function() camera.CameraType = State.Drone.SavedType or Enum.CameraType.Custom end)
+				local subject = State.Drone.SavedSubject
+				if not subject or not subject.Parent then
+					local _, humanoid = getLocalCharacter()
+					subject = humanoid
+				end
+				if subject then pcall(function() camera.CameraSubject = subject end) end
+			end
+			applyCharacterControl()
+		end
+
+		local function pointInside(gui, point)
+			if not gui or not gui.Parent or not gui.Visible then return false end
+			local position = gui.AbsolutePosition
+			local size = gui.AbsoluteSize
+			return point.X >= position.X and point.X <= position.X + size.X and point.Y >= position.Y and point.Y <= position.Y + size.Y
+		end
+
+		local function updateDrone(dt)
+			if not Settings.DroneCamera then
+				if State.Drone.Active then stopDrone() end
+				return
+			end
+			if not State.Drone.Active then startDrone() end
+			local camera = workspace.CurrentCamera
+			if not camera or not State.Drone.Active then return end
+			if not MOBILE_DEVICE then
+				local delta = State.Drone.LookDelta
+				State.Drone.LookDelta = Vector2.zero
+				if State.Drone.MouseLook and delta.Magnitude > 0 then
+					State.Drone.Yaw = State.Drone.Yaw - delta.X * 0.0032
+					State.Drone.Pitch = math.clamp(State.Drone.Pitch - delta.Y * 0.0032, math.rad(-85), math.rad(85))
+				end
+				local keyboardTurnSpeed = math.rad(115) * dt
+				if UserInputService:IsKeyDown(Enum.KeyCode.Left) then State.Drone.Yaw = State.Drone.Yaw + keyboardTurnSpeed end
+				if UserInputService:IsKeyDown(Enum.KeyCode.Right) then State.Drone.Yaw = State.Drone.Yaw - keyboardTurnSpeed end
+				if UserInputService:IsKeyDown(Enum.KeyCode.Up) then
+					State.Drone.Pitch = math.clamp(State.Drone.Pitch + keyboardTurnSpeed, math.rad(-85), math.rad(85))
+				end
+				if UserInputService:IsKeyDown(Enum.KeyCode.Down) then
+					State.Drone.Pitch = math.clamp(State.Drone.Pitch - keyboardTurnSpeed, math.rad(-85), math.rad(85))
+				end
+			end
+			local orientation = CFrame.fromOrientation(State.Drone.Pitch, State.Drone.Yaw, 0)
+			local movement = Vector3.new()
+			if MOBILE_DEVICE then
+				local mobileMove = nil
+				if MobileMovementControls then pcall(function() mobileMove = MobileMovementControls:GetMoveVector() end) end
+				if mobileMove and mobileMove.Magnitude > 0.01 then
+					movement = movement + orientation.RightVector * mobileMove.X
+					movement = movement - orientation.LookVector * mobileMove.Z
+				end
+				movement = movement + Vector3.new(0, State.Drone.Vertical, 0)
+			end
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then movement = movement + orientation.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then movement = movement - orientation.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then movement = movement - orientation.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then movement = movement + orientation.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.E) then movement = movement + Vector3.new(0, 1, 0) end
+			if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.Q) then movement = movement - Vector3.new(0, 1, 0) end
+			if movement.Magnitude > 1 then movement = movement.Unit end
+			State.Drone.Position = State.Drone.Position + movement * Settings.DroneSpeed * dt
+			camera.CameraType = Enum.CameraType.Scriptable
+			camera.CFrame = CFrame.new(State.Drone.Position) * orientation
+		end
+
+		local function updateSpin(dt)
+			if not Settings.Spin then return end
+			local _, _, root = getLocalCharacter()
+			if not root then return end
+			local degreesPerSecond = math.clamp(tonumber(Settings.SpinSpeed) or 120, 10, 400) * 10
+			pcall(function()
+				root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(degreesPerSecond) * dt, 0)
+				root.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
+
+		local function newEspObjects(player)
+			local outline = Instance.new("Frame")
+			outline.BackgroundTransparency = 1
+			outline.BorderSizePixel = 0
+			outline.Visible = false
+			outline.ZIndex = 3
+			outline.Parent = EspLayer
+			mkStroke(outline, Color3.fromRGB(0, 0, 0), 0.05, 3)
+
+			local box = Instance.new("Frame")
+			box.BackgroundTransparency = 1
+			box.BorderSizePixel = 0
+			box.Visible = false
+			box.ZIndex = 4
+			box.Parent = EspLayer
+			mkStroke(box, Color3.fromRGB(255, 255, 255), 0.02, 1)
+
+			local name = Instance.new("TextLabel")
+			name.BackgroundTransparency = 1
+			name.BorderSizePixel = 0
+			name.Text = player.Name
+			name.TextColor3 = Color3.fromRGB(255, 255, 255)
+			name.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+			name.TextStrokeTransparency = 0
+			name.TextSize = 13
+			name.Font = Enum.Font.GothamSemibold
+			name.TextXAlignment = Enum.TextXAlignment.Center
+			name.Visible = false
+			name.ZIndex = 5
+			name.Parent = EspLayer
+			name:SetAttribute("HexaNoTranslate", true)
+
+			local healthBackground = Instance.new("Frame")
+			healthBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			healthBackground.BorderSizePixel = 0
+			healthBackground.Visible = false
+			healthBackground.ZIndex = 4
+			healthBackground.Parent = EspLayer
+
+			local health = Instance.new("Frame")
+			health.AnchorPoint = Vector2.new(0, 1)
+			health.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+			health.BorderSizePixel = 0
+			health.Visible = false
+			health.ZIndex = 5
+			health.Parent = EspLayer
+
+			local cache = {Outline = outline, Box = box, Name = name, HealthBackground = healthBackground, Health = health}
+			State.EspCache[player] = cache
+			return cache
+		end
+
+		local function hideEsp(cache)
+			if not cache then return end
+			for _, object in pairs(cache) do
+				if object and object:IsA("GuiObject") then object.Visible = false end
+			end
+		end
+
+		local function hideAllEsp()
+			for _, cache in pairs(State.EspCache) do hideEsp(cache) end
+		end
+
+		local function getScreenBounds(character, camera)
+			local minX, minY = math.huge, math.huge
+			local maxX, maxY = -math.huge, -math.huge
+			local visiblePoints = 0
+			for _, part in ipairs(character:GetDescendants()) do
+				if part:IsA("BasePart") and part:GetAttribute("HexaHitboxProxy") ~= true then
+					for x = -1, 1, 2 do
+						for y = -1, 1, 2 do
+							for z = -1, 1, 2 do
+								local offset = Vector3.new(part.Size.X * x * 0.5, part.Size.Y * y * 0.5, part.Size.Z * z * 0.5)
+								local point = camera:WorldToViewportPoint(part.CFrame:PointToWorldSpace(offset))
+								if point.Z > 0 then
+									visiblePoints += 1
+									minX = math.min(minX, point.X)
+									minY = math.min(minY, point.Y)
+									maxX = math.max(maxX, point.X)
+									maxY = math.max(maxY, point.Y)
+								end
+							end
+						end
+					end
+				end
+			end
+			if visiblePoints < 2 or minX == math.huge then return nil end
+			return minX, minY, maxX, maxY
+		end
+
+		local function renderEsp()
+			if not (Settings.BoxESP or Settings.NameESP or Settings.HealthESP) then
+				hideAllEsp()
+				return
+			end
+			local camera = workspace.CurrentCamera
+			local _, _, localRoot = getLocalCharacter()
+			if not camera then hideAllEsp(); return end
+			for _, player in ipairs(Players:GetPlayers()) do
+				if player ~= LocalPlayer then
+					local cache = State.EspCache[player] or newEspObjects(player)
+					local character = player.Character
+					local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+					local root = character and character:FindFirstChild("HumanoidRootPart")
+					local valid = character and humanoid and root and humanoid.Health > 0 and isValidPlayer(player)
+					if valid and localRoot and (root.Position - localRoot.Position).Magnitude > maxEspDistance then valid = false end
+					if valid then
+						local minX, minY, maxX, maxY = getScreenBounds(character, camera)
+						if minX then
+							local width = math.max(2, maxX - minX)
+							local height = math.max(2, maxY - minY)
+							cache.Outline.Position = UDim2.fromOffset(minX, minY)
+							cache.Outline.Size = UDim2.fromOffset(width, height)
+							cache.Box.Position = UDim2.fromOffset(minX, minY)
+							cache.Box.Size = UDim2.fromOffset(width, height)
+							cache.Outline.Visible = Settings.BoxESP
+							cache.Box.Visible = Settings.BoxESP
+							cache.Name.Position = UDim2.fromOffset(minX - 20, minY - 20)
+							cache.Name.Size = UDim2.fromOffset(width + 40, 18)
+							cache.Name.Text = player.Name
+							cache.Name.Visible = Settings.NameESP
+							local healthPercent = math.clamp(humanoid.Health / math.max(1, humanoid.MaxHealth), 0, 1)
+							cache.HealthBackground.Position = UDim2.fromOffset(minX - 8, minY)
+							cache.HealthBackground.Size = UDim2.fromOffset(5, height)
+							cache.Health.Position = UDim2.fromOffset(minX - 7, minY + height)
+							cache.Health.Size = UDim2.fromOffset(3, height * healthPercent)
+							cache.Health.BackgroundColor3 = Color3.fromHSV(healthPercent * 0.33, 1, 1)
+							cache.HealthBackground.Visible = Settings.HealthESP
+							cache.Health.Visible = Settings.HealthESP
+						else
+							hideEsp(cache)
+						end
+					else
+						hideEsp(cache)
+					end
+				end
+			end
+		end
+
+		local function triggerShot()
+			local now = os.clock()
+			if now - State.LastTrigger < 0.09 then return end
+			local target = Mouse.Target
+			local character = target and target:FindFirstAncestorOfClass("Model")
+			local player = character and Players:GetPlayerFromCharacter(character)
+			if not player or not isValidPlayer(player) then return end
+			local part = target and target:IsA("BasePart") and target or character:FindFirstChild("HumanoidRootPart")
+			if part and not isVisible(part) then return end
+			State.LastTrigger = now
+			if type(mouse1click) == "function" then
+				pcall(mouse1click)
+			else
+				local localCharacter = LocalPlayer.Character
+				local tool = localCharacter and localCharacter:FindFirstChildOfClass("Tool")
+				if tool then pcall(function() tool:Activate() end) end
+			end
+		end
+
+		local function restoreHumanoid()
+			local _, humanoid = getLocalCharacter()
+			if not humanoid then return end
+			pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true) end)
+			pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true) end)
+		end
+
+		local function updateHumanoid()
+			local _, humanoid = getLocalCharacter()
+			if not humanoid then return end
+			if Settings.AntiStun then
+				if not flyActive then pcall(function() humanoid.PlatformStand = false end) end
+				if not Settings.DroneCamera and not Settings.Spin then
+					pcall(function() humanoid.AutoRotate = true end)
+				end
+			end
+			if Settings.AntiRagdoll then
+				pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false) end)
+				pcall(function() humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false) end)
+				local currentState = humanoid:GetState()
+				if currentState == Enum.HumanoidStateType.Ragdoll or currentState == Enum.HumanoidStateType.FallingDown or currentState == Enum.HumanoidStateType.Physics then
+					pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end)
+				end
+			end
+		end
+
+		local function suspend()
+			stopDrone()
+			restoreWeapons()
+			restoreVehicle()
+			restoreHumanoid()
+			releaseCharacterControl()
+			hideAllEsp()
+		end
+
+		local function disableAll(updateButtons)
+			for settingName in pairs(Buttons) do Settings[settingName] = false end
+			HexaSharedTargetFilters.WallCheck = false
+			HexaSharedTargetFilters:SetTeamCheck(false)
+			suspend()
+			if updateButtons then
+				for _, button in pairs(Buttons) do
+					if button and button.Parent then setActive(button, false) end
+				end
+			end
+		end
+
+		local function cleanup()
+			if State.Dead then return end
+			State.Dead = true
+			disableAll(false)
+			for _, connection in ipairs(State.Connections) do pcall(function() connection:Disconnect() end) end
+			table.clear(State.Connections)
+			for player, cache in pairs(State.EspCache) do
+				for _, object in pairs(cache) do if object and object.Parent then object:Destroy() end end
+				State.EspCache[player] = nil
+			end
+			if EspLayer and EspLayer.Parent then EspLayer:Destroy() end
+			if MobileDroneControls and MobileDroneControls.Parent then MobileDroneControls:Destroy() end
+		end
+
+		local function bindToggle(button, settingName, callback)
+			connect(button.MouseButton1Click, function()
+				if button:GetAttribute("HexaVipOnly") == true and not requireVip() then return end
+				Settings[settingName] = not Settings[settingName]
+				setActive(button, Settings[settingName])
+				if callback then pcall(callback, Settings[settingName]) end
+			end)
+		end
+
+		bindToggle(TriggerButton, "TriggerBot")
+		bindToggle(WallButton, "WallCheck", function(enabled) HexaSharedTargetFilters.WallCheck = enabled end)
+		bindToggle(TeamButton, "TeamCheck", function(enabled) HexaSharedTargetFilters:SetTeamCheck(enabled); AimHighlight.Adornee = nil; renderEsp() end)
+		bindToggle(NoRecoilButton, "NoRecoil", function(enabled)
+			if not enabled then
+				restoreValues(State.NoRecoilValues)
+				restoreAttributes(State.NoRecoilAttributes)
+			end
+		end)
+		bindToggle(RapidButton, "RapidFire", function(enabled)
+			if not enabled then
+				restoreValues(State.RapidValues)
+				restoreAttributes(State.RapidAttributes)
+			end
+		end)
+		bindToggle(VehicleButton, "VehicleSpeed", function(enabled) if not enabled then restoreVehicle() end end)
+		bindToggle(DroneButton, "DroneCamera", function(enabled)
+			if enabled then startDrone() else stopDrone() end
+		end)
+		bindToggle(SpinButton, "Spin", function()
+			applyCharacterControl()
+		end)
+		bindToggle(AntiStunButton, "AntiStun")
+		bindToggle(AntiRagdollButton, "AntiRagdoll", function(enabled) if not enabled then restoreHumanoid() end end)
+		bindToggle(BoxButton, "BoxESP", function(enabled) if not enabled then renderEsp() end end)
+		bindToggle(NameButton, "NameESP", function(enabled) if not enabled then renderEsp() end end)
+		bindToggle(HealthButton, "HealthESP", function(enabled) if not enabled then renderEsp() end end)
+
+		HexaSharedTargetFilters.WallCheck = true
+		HexaSharedTargetFilters:SetTeamCheck(true)
+		setActive(WallButton, true)
+		setActive(TeamButton, true)
+
+		addVipStateListener(function(isVip)
+			if isVip or State.Dead then return end
+			if Settings.NoRecoil then
+				Settings.NoRecoil = false
+				restoreValues(State.NoRecoilValues)
+				restoreAttributes(State.NoRecoilAttributes)
+				setActive(NoRecoilButton, false)
+			end
+			if Settings.RapidFire then
+				Settings.RapidFire = false
+				restoreValues(State.RapidValues)
+				restoreAttributes(State.RapidAttributes)
+				setActive(RapidButton, false)
+			end
+			if Settings.DroneCamera then
+				Settings.DroneCamera = false
+				stopDrone()
+				setActive(DroneButton, false)
+			end
+		end)
+
+		connect(UserInputService.InputBegan, function(input, processed)
+			if processed or not State.Drone.Active then return end
+			if not MOBILE_DEVICE then
+				if input.UserInputType == Enum.UserInputType.MouseButton2 then
+					setDesktopDroneLook(true)
+				end
+				return
+			end
+			if input.UserInputType ~= Enum.UserInputType.Touch then return end
+			local camera = workspace.CurrentCamera
+			if not camera or input.Position.X < camera.ViewportSize.X * 0.42 then return end
+			if pointInside(MainFrame, input.Position) or pointInside(MobileDroneControls, input.Position) then return end
+			State.Drone.LookTouch = input
+			State.Drone.LastTouch = input.Position
+		end)
+
+		connect(UserInputService.InputChanged, function(input)
+			if not MOBILE_DEVICE and State.Drone.Active and State.Drone.MouseLook
+				and input.UserInputType == Enum.UserInputType.MouseMovement then
+				local delta = input.Delta
+				State.Drone.LookDelta = State.Drone.LookDelta + Vector2.new(delta.X, delta.Y)
+				return
+			end
+			if input ~= State.Drone.LookTouch or not State.Drone.LastTouch then return end
+			local delta = input.Position - State.Drone.LastTouch
+			State.Drone.LastTouch = input.Position
+			State.Drone.Yaw = State.Drone.Yaw - delta.X * 0.004
+			State.Drone.Pitch = math.clamp(State.Drone.Pitch - delta.Y * 0.004, math.rad(-85), math.rad(85))
+		end)
+
+		connect(UserInputService.InputEnded, function(input)
+			if not MOBILE_DEVICE and input.UserInputType == Enum.UserInputType.MouseButton2 then
+				setDesktopDroneLook(false)
+			end
+			if input == State.Drone.LookTouch then
+				State.Drone.LookTouch = nil
+				State.Drone.LastTouch = nil
+			end
+			if input == State.Drone.VerticalInput then
+				State.Drone.VerticalInput = nil
+				State.Drone.Vertical = 0
+			end
+		end)
+
+		connect(UserInputService.WindowFocusReleased, function()
+			setDesktopDroneLook(false)
+		end)
+
+		connect(Players.PlayerRemoving, function(player)
+			local cache = State.EspCache[player]
+			if cache then
+				for _, object in pairs(cache) do if object and object.Parent then object:Destroy() end end
+				State.EspCache[player] = nil
+			end
+		end)
+
+		local function bindPanicButton(object)
+			if not object:IsA("TextButton") or object:GetAttribute("HexaAdvancedPanicBound") then return end
+			local baseText = tostring(object:GetAttribute("BaseText") or object.Text or "")
+			if string.find(string.upper(baseText), "MODO PÁNICO", 1, true) or string.find(string.upper(baseText), "PANIC MODE", 1, true) then
+				object:SetAttribute("HexaAdvancedPanicBound", true)
+				connect(object.MouseButton1Click, function() disableAll(true) end)
+			end
+		end
+		for _, object in ipairs(ScreenGui:GetDescendants()) do bindPanicButton(object) end
+		connect(ScreenGui.DescendantAdded, function(object) task.defer(function() if object and object.Parent then bindPanicButton(object) end end) end)
+
+		connect(ScreenGui.AncestryChanged, function(_, parent)
+			if parent == nil then cleanup() end
+		end)
+
+		connect(RunService.RenderStepped, function(dt)
+			if State.Dead then return end
+			local now = os.clock()
+			if Settings.TriggerBot then triggerShot() end
+			if Settings.NoRecoil or Settings.RapidFire then updateWeapons(now) else restoreWeapons() end
+			if Settings.VehicleSpeed then updateVehicle() else restoreVehicle() end
+			applyCharacterControl()
+			updateDrone(dt)
+			updateSpin(dt)
+			updateHumanoid()
+			if now - State.LastEspRender >= 0.033 then
+				State.LastEspRender = now
+				renderEsp()
+			end
+		end)
+	end, function(errorMessage)
+		local trace = tostring(errorMessage)
+		pcall(function()
+			if debug and debug.traceback then trace = debug.traceback(trace, 2) end
+		end)
+		return trace
+	end)
+
+	if not moduleOk then
+		warn("[HEXA X / FUNCIONES ADICIONALES] " .. tostring(moduleError))
+	end
+end)
+
+-- ================================================================
+-- HITBOX EXTENDER, INSTANT HIT Y MODO JESÚS
+-- Integrados usando la interfaz principal de HEXA X.
+-- ================================================================
+task.spawn(function()
+	local essentialsOk, essentialsError = xpcall(function()
+		local State = {
+			Dead = false,
+			HitboxActive = false,
+			HitboxSize = 10,
+			InstantHitActive = false,
+			JesusActive = false,
+			Connections = {},
+			HitboxProxies = setmetatable({}, {__mode = "k"}),
+			Projectiles = setmetatable({}, {__mode = "k"}),
+			LastProjectileUpdate = 0,
+		}
+
+		local function connect(signal, callback)
+			local connection = signal:Connect(callback)
+			table.insert(State.Connections, connection)
+			return connection
+		end
+
+		local EssentialsCard = sectionCard(252)
+		EssentialsCard.LayoutOrder = 22
+		sectionTitle(EssentialsCard, "FUNCIONES ESENCIALES", UDim2.new(0, 16, 0, 14))
+
+		local HitboxButton = createToggleButton(EssentialsCard, "HITBOX EXTENDER", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+		createSlider(EssentialsCard, "Tamaño de Hitbox", 2, 50, State.HitboxSize, 90, function(value)
+			State.HitboxSize = value
+		end, false, 17)
+		local InstantHitButton = createToggleButton(EssentialsCard, "INSTANT HIT", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 150))
+		markVipControl(InstantHitButton)
+		local JesusButton = createToggleButton(EssentialsCard, "MODO JESÚS (CAMINAR SOBRE AGUA)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 196))
+
+		local JesusPart = Instance.new("Part")
+		JesusPart.Name = "HexaJesusPlatform"
+		JesusPart.Size = Vector3.new(12, 1, 12)
+		JesusPart.Anchored = true
+		JesusPart.Transparency = 1
+		JesusPart.CanCollide = true
+		JesusPart.CanTouch = false
+		JesusPart.CanQuery = false
+
+		local function destroyHitboxProxy(player)
+			local entry = State.HitboxProxies[player]
+			if not entry then return end
+			local proxy = entry.Part
+			if proxy and proxy.Parent then pcall(function() proxy:Destroy() end) end
+			State.HitboxProxies[player] = nil
+		end
+
+		local function destroyAllHitboxes()
+			local playersToClear = {}
+			for player in pairs(State.HitboxProxies) do table.insert(playersToClear, player) end
+			for _, player in ipairs(playersToClear) do destroyHitboxProxy(player) end
+		end
+
+		local function createHitboxProxy(player, character)
+			local proxy = Instance.new("Part")
+			proxy.Name = "HexaHitboxProxy"
+			proxy.Anchored = true
+			proxy.CanCollide = false
+			proxy.CanTouch = false
+			proxy.CanQuery = true
+			proxy.CastShadow = false
+			proxy.Massless = true
+			proxy.Transparency = 0.6
+			proxy.Color = Color3.fromRGB(255, 45, 45)
+			proxy.Material = Enum.Material.Neon
+			proxy.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
+			proxy:SetAttribute("HexaHitboxProxy", true)
+			proxy.Parent = character
+			State.HitboxProxies[player] = {Part = proxy, Character = character}
+			return proxy
+		end
+
+		local function applyHitboxes()
+			local activePlayers = {}
+			for _, player in ipairs(Players:GetPlayers()) do
+				if HexaSharedTargetFilters:AllowsPlayer(player, true) then
+					local character = player.Character
+					local root = character and character:FindFirstChild("HumanoidRootPart")
+					if root then
+						activePlayers[player] = true
+						local entry = State.HitboxProxies[player]
+						local proxy = entry and entry.Part
+						if not proxy or not proxy.Parent or entry.Character ~= character then
+							destroyHitboxProxy(player)
+							proxy = createHitboxProxy(player, character)
+						end
+						pcall(function()
+							proxy.Size = Vector3.new(State.HitboxSize, State.HitboxSize, State.HitboxSize)
+							proxy.CFrame = root.CFrame
+						end)
+					end
+				end
+			end
+
+			local stalePlayers = {}
+			for player in pairs(State.HitboxProxies) do
+				if not activePlayers[player] then table.insert(stalePlayers, player) end
+			end
+			for _, player in ipairs(stalePlayers) do destroyHitboxProxy(player) end
+		end
+
+		local function isProjectile(part)
+			if not part:IsA("BasePart") then return false end
+			local lowered = string.lower(part.Name)
+			return string.find(lowered, "bullet", 1, true) ~= nil
+				or string.find(lowered, "projectile", 1, true) ~= nil
+		end
+
+		local function accelerateProjectile(part)
+			if not part or not part.Parent or not isProjectile(part) then return end
+			State.Projectiles[part] = true
+			pcall(function()
+				local velocity = part.CFrame.LookVector * 9999
+				part.AssemblyLinearVelocity = velocity
+				part.Velocity = velocity
+			end)
+		end
+
+		local function scanProjectiles()
+			for _, object in ipairs(workspace:GetDescendants()) do
+				if isProjectile(object) then
+					State.Projectiles[object] = true
+					accelerateProjectile(object)
+				end
+			end
+		end
+
+		local function updateJesusPlatform()
+			if not State.JesusActive then
+				JesusPart.Parent = nil
+				return
+			end
+			local character = LocalPlayer.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if not root or not humanoid or humanoid.Health <= 0 then
+				JesusPart.Parent = nil
+				return
+			end
+
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			params.FilterDescendantsInstances = {character, JesusPart}
+			params.IgnoreWater = false
+			local result = workspace:Raycast(root.Position, Vector3.new(0, -8, 0), params)
+			if result and result.Material == Enum.Material.Water then
+				JesusPart.Position = Vector3.new(root.Position.X, result.Position.Y - 0.45, root.Position.Z)
+				JesusPart.Parent = workspace
+			else
+				JesusPart.Parent = nil
+			end
+		end
+
+		local function setHitbox(enabled)
+			State.HitboxActive = enabled == true
+			setActive(HitboxButton, State.HitboxActive)
+			if not State.HitboxActive then destroyAllHitboxes() end
+		end
+
+		local function setInstantHit(enabled)
+			if enabled == true and not HEXA_IS_VIP then
+				requireVip()
+				enabled = false
+			end
+			State.InstantHitActive = enabled == true
+			setActive(InstantHitButton, State.InstantHitActive)
+			if State.InstantHitActive then scanProjectiles() end
+		end
+
+		local function setJesus(enabled)
+			State.JesusActive = enabled == true
+			setActive(JesusButton, State.JesusActive)
+			if not State.JesusActive then JesusPart.Parent = nil end
+		end
+
+		local function disableAll()
+			setHitbox(false)
+			setInstantHit(false)
+			setJesus(false)
+		end
+
+		local function cleanup()
+			if State.Dead then return end
+			State.Dead = true
+			disableAll()
+			for _, connection in ipairs(State.Connections) do
+				pcall(function() connection:Disconnect() end)
+			end
+			table.clear(State.Connections)
+			if JesusPart then JesusPart:Destroy() end
+		end
+
+		connect(HitboxButton.MouseButton1Click, function() setHitbox(not State.HitboxActive) end)
+		connect(InstantHitButton.MouseButton1Click, function()
+			if not State.InstantHitActive and not requireVip() then return end
+			setInstantHit(not State.InstantHitActive)
+		end)
+		connect(JesusButton.MouseButton1Click, function() setJesus(not State.JesusActive) end)
+
+		addVipStateListener(function(isVip)
+			if State.Dead then return end
+			if not isVip and State.InstantHitActive then setInstantHit(false) end
+		end)
+
+		connect(workspace.DescendantAdded, function(object)
+			if isProjectile(object) then
+				State.Projectiles[object] = true
+				if State.InstantHitActive then accelerateProjectile(object) end
+			end
+		end)
+		connect(workspace.DescendantRemoving, function(object)
+			State.Projectiles[object] = nil
+		end)
+
+		connect(Players.PlayerRemoving, function(player)
+			destroyHitboxProxy(player)
+		end)
+
+		local function bindPanicButton(object)
+			if not object:IsA("TextButton") or object:GetAttribute("HexaEssentialsPanicBound") then return end
+			local baseText = tostring(object:GetAttribute("BaseText") or object.Text or "")
+			local upper = string.upper(baseText)
+			if string.find(upper, "MODO PÁNICO", 1, true) or string.find(upper, "PANIC MODE", 1, true) then
+				object:SetAttribute("HexaEssentialsPanicBound", true)
+				connect(object.MouseButton1Click, disableAll)
+			end
+		end
+		for _, object in ipairs(ScreenGui:GetDescendants()) do bindPanicButton(object) end
+		connect(ScreenGui.DescendantAdded, function(object)
+			task.defer(function()
+				if object and object.Parent then bindPanicButton(object) end
+			end)
+		end)
+
+		connect(ScreenGui.AncestryChanged, function(_, parent)
+			if parent == nil then cleanup() end
+		end)
+
+		connect(RunService.Stepped, function()
+			if State.Dead then return end
+			if State.HitboxActive then applyHitboxes() end
+			updateJesusPlatform()
+
+			if State.InstantHitActive and os.clock() - State.LastProjectileUpdate >= 0.05 then
+				State.LastProjectileUpdate = os.clock()
+				for projectile in pairs(State.Projectiles) do
+					if projectile and projectile.Parent then
+						accelerateProjectile(projectile)
+					else
+						State.Projectiles[projectile] = nil
+					end
+				end
+			end
+		end)
+	end, function(errorMessage)
+		local trace = tostring(errorMessage)
+		pcall(function()
+			if debug and debug.traceback then trace = debug.traceback(trace, 2) end
+		end)
+		return trace
+	end)
+
+	if not essentialsOk then
+		warn("[HEXA X / FUNCIONES ESENCIALES] " .. tostring(essentialsError))
+	end
+end)
+
 DiscordButton.MouseButton1Click:Connect(function() local link="https://discord.gg/sewRzHAG5J" if setclipboard then setclipboard(link) elseif toclipboard then toclipboard(link) end DiscordButton.Text="¡ENLACE COPIADO AL PORTAPAPELES!" task.delay(2, function() DiscordButton.Text="UNIRSE AL DISCORD (COPIAR ENLACE)" end) end)
 DropdownButton.MouseButton1Click:Connect(function() rebuildPlayerList(); DropdownList.Visible = not DropdownList.Visible end)
-GotoButton.MouseButton1Click:Connect(function() if selectedTargetPlayer and selectedTargetPlayer.Character then local targetRoot = selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") local _, _, root = getCharacterData() if root and targetRoot then pcall(function() root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0) end) end end end)
+GotoButton.MouseButton1Click:Connect(function()
+	local target = selectedTargetPlayer
+	if not HexaSharedTargetFilters:AllowsPlayer(target, true) then return end
+	local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+	local _, _, root = getCharacterData()
+	if root and targetRoot then pcall(function() root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0) end) end
+end)
 UserInputService.JumpRequest:Connect(function() if infiniteJumpActive then local _, hum = getCharacterData() if hum and hum.Health > 0 then pcall(function() hum:ChangeState(Enum.HumanoidStateType.Jumping) end) end end end)
 
 local tweenIn = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -2903,6 +4235,11 @@ Runtime.espConn = RunService.RenderStepped:Connect(function()
 		if not espCache[player] then espCache[player] = { Tracer = getEspFrame("Tracer"), Skel = {} } end
 		
 		local cache = espCache[player]
+		if not HexaSharedTargetFilters:AllowsPlayer(player, true) then
+			cache.Tracer.Visible = false
+			for _, bone in ipairs(cache.Skel) do bone.Visible = false end
+			continue
+		end
 		local char = player.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
 		local drawTracers, drawBones, skelIndex = false, false, 1
@@ -2959,10 +4296,18 @@ Runtime.renderConn = RunService.RenderStepped:Connect(function()
 	local isBodyActive = autoAimBodyActive and isKeyActive(bodyAimKey)
 
 	if isHeadActive or isBodyActive then
-		local targetPlayer = getClosestPlayer()
-		if targetPlayer and targetPlayer.Character then
-			local targetPart = (isHeadActive and targetPlayer.Character:FindFirstChild("Head")) or targetPlayer.Character:FindFirstChild("UpperTorso") or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-			if targetPart then
+		local targetPlayer = getClosestPlayer(isHeadActive)
+		if HexaSharedTargetFilters:AllowsPlayer(targetPlayer, true) and targetPlayer.Character then
+			local targetPart
+			if isHeadActive then
+				targetPart = targetPlayer.Character:FindFirstChild("Head") or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+			else
+				targetPart = targetPlayer.Character:FindFirstChild("UpperTorso")
+					or targetPlayer.Character:FindFirstChild("Torso")
+					or targetPlayer.Character:FindFirstChild("LowerTorso")
+					or targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+			end
+			if targetPart and passesWallCheck(targetPart) then
 				if AimHighlight.Adornee ~= targetPlayer.Character then AimHighlight.Adornee = targetPlayer.Character end
 				local cam = workspace.CurrentCamera
 				if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, targetPart.Position) end
@@ -3070,6 +4415,8 @@ task.spawn(function()
 		local Lighting = game:GetService("Lighting")
 		local TeleportService = game:GetService("TeleportService")
 		local VirtualUser = game:GetService("VirtualUser")
+		local VirtualInputManager = nil
+		pcall(function() VirtualInputManager = game:GetService("VirtualInputManager") end)
 		local Stats = game:GetService("Stats")
 
 		local X = {
@@ -3108,9 +4455,6 @@ task.spawn(function()
 			AntiAfk = false,
 			AutoRespawn = false,
 			AutoEquip = false,
-			AutoClicker = false,
-			AutoClickCps = 15,
-			LastAutoClick = 0,
 			Performance = false,
 			PerformanceGeneration = 0,
 			PerformanceBusy = false,
@@ -3175,7 +4519,7 @@ task.spawn(function()
 
 		function X:setupCrosshair()
 			self.CrosshairCard, self.CrosshairTitle = self:makeCard(394, "MIRA PERSONALIZADA")
-			self.CrosshairCard.LayoutOrder = 31
+			self.CrosshairCard.LayoutOrder = 32
 			self.CrosshairOverlay = Instance.new("Frame")
 			self.CrosshairOverlay.Name = "HexaCustomCrosshair"
 			self.CrosshairOverlay.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -3552,7 +4896,9 @@ task.spawn(function()
 			self.InspectorText:SetAttribute("HexaNoTranslate", true)
 
 			self:connect(self.FollowPlayerButton.MouseButton1Click, function()
-				self.FollowPlayer = not self.FollowPlayer
+				local enabling = not self.FollowPlayer
+				if enabling and not HexaSharedTargetFilters:AllowsPlayer(selectedTargetPlayer, true) then return end
+				self.FollowPlayer = enabling
 				self:toggle(self.FollowPlayerButton, self.FollowPlayer)
 				if not self.FollowPlayer then
 					local _, humanoid, root = self:getCharacter()
@@ -3561,12 +4907,16 @@ task.spawn(function()
 			end)
 			self:connect(self.SpectateButton.MouseButton1Click, function()
 				if not requireVip() then return end
-				self.Spectating = not self.Spectating
+				local enabling = not self.Spectating
+				if enabling and not HexaSharedTargetFilters:AllowsPlayer(selectedTargetPlayer, true) then return end
+				self.Spectating = enabling
 				self:toggle(self.SpectateButton, self.Spectating)
 				if not self.Spectating then self:restoreCameraSubject() end
 			end)
 			self:connect(self.InspectorButton.MouseButton1Click, function()
-				self.InspectorEnabled = not self.InspectorEnabled
+				local enabling = not self.InspectorEnabled
+				if enabling and not HexaSharedTargetFilters:AllowsPlayer(selectedTargetPlayer, false) then return end
+				self.InspectorEnabled = enabling
 				self:toggle(self.InspectorButton, self.InspectorEnabled)
 				self.InspectorFrame.Visible = self.InspectorEnabled
 				self:updatePlayerInspector(os.clock(), true)
@@ -3588,6 +4938,11 @@ task.spawn(function()
 			if not self.FollowPlayer or now - self.LastFollowUpdate < 0.1 then return end
 			self.LastFollowUpdate = now
 			local target = selectedTargetPlayer
+			if not HexaSharedTargetFilters:AllowsPlayer(target, true) then
+				self.FollowPlayer = false
+				self:toggle(self.FollowPlayerButton, false)
+				return
+			end
 			local _, humanoid, root = self:getCharacter()
 			local targetCharacter = target and target.Character
 			local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
@@ -3634,6 +4989,12 @@ task.spawn(function()
 			if not self.Spectating then return end
 			local camera = workspace.CurrentCamera
 			local target = selectedTargetPlayer
+			if not HexaSharedTargetFilters:AllowsPlayer(target, true) then
+				self.Spectating = false
+				self:toggle(self.SpectateButton, false)
+				self:restoreCameraSubject()
+				return
+			end
 			local targetCharacter = target and target.Character
 			local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
 			if camera and targetHumanoid and targetHumanoid.Health > 0 then
@@ -3654,8 +5015,8 @@ task.spawn(function()
 			local english = Lang.Current == "EN"
 			self.InspectorTitle.Text = english and "PLAYER INSPECTOR" or "INSPECTOR DE JUGADOR"
 			local target = selectedTargetPlayer
-			if not target then
-				self.InspectorText.Text = english and "SELECT A PLAYER" or "SELECCIONA UN JUGADOR"
+			if not target or not HexaSharedTargetFilters:AllowsPlayer(target, false) then
+				self.InspectorText.Text = english and "SELECT AN ALLOWED PLAYER" or "SELECCIONA UN JUGADOR PERMITIDO"
 				return
 			end
 			local _, _, localRoot = self:getCharacter()
@@ -3849,24 +5210,60 @@ task.spawn(function()
 			end
 		end
 
-		function X:setupMisc()
-			self.MiscCard, self.MiscTitle = self:makeCard(492, "MISCELÁNEO")
-			self.MiscCard.LayoutOrder = 70
-			self.AntiAfkButton = createToggleButton(self.MiscCard, "ANTI AUSENCIA (AFK)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
-			self.ReconnectButton = neonButton(self.MiscCard, "RECONECTAR AL SERVIDOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
-			self.AutoRespawnButton = createToggleButton(self.MiscCard, "REAPARICIÓN AUTOMÁTICA", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
-			self.AutoEquipButton = createToggleButton(self.MiscCard, "EQUIPAR HERRAMIENTA AUTOMÁTICAMENTE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 182))
-			self.PerformanceButton = createToggleButton(self.MiscCard, "MODO RENDIMIENTO: CARTÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 228))
-			self.StreamerButton = createToggleButton(self.MiscCard, "MODO TRANSMISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 274))
-			self.AutoClickerButton = createToggleButton(self.MiscCard, MOBILE_DEVICE and "AUTO TOQUES" or "AUTOCLICKER", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 320))
-			self.AutoClickCpsSlider = createSlider(self.MiscCard, MOBILE_DEVICE and "Toques por segundo" or "Clics por segundo", 1, 100, self.AutoClickCps, 366, function(value)
-				self.AutoClickCps = value
-			end, true)
-			markVipControl(self.AutoClickerButton)
-			self.PanicButton = neonButton(self.MiscCard, "ACTIVAR MODO PÁNICO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 432))
+		function X:setupSafety()
+			self.SafetyCard, self.SafetyTitle = self:makeCard(98, "SEGURIDAD Y CONTROL")
+			self.SafetyCard.LayoutOrder = -3
+			self.PanicButton = Instance.new("TextButton")
+			self.PanicButton.Size = UDim2.new(1, -32, 0, 38)
+			self.PanicButton.Position = UDim2.new(0, 16, 0, 44)
 			self.PanicButton.BackgroundColor3 = Theme.Danger
-			self.PanicButton.TextColor3 = Theme.ActiveText
+			self.PanicButton.BackgroundTransparency = 0.02
+			self.PanicButton.BorderSizePixel = 0
+			self.PanicButton.Text = "ACTIVAR MODO PÁNICO"
+			self.PanicButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+			self.PanicButton.TextSize = 12
+			self.PanicButton.Font = Enum.Font.GothamBold
+			self.PanicButton.AutoButtonColor = false
+			self.PanicButton.ZIndex = 2
+			self.PanicButton.Parent = self.SafetyCard
+			mkCorner(self.PanicButton, 10)
+			mkStroke(self.PanicButton, Color3.fromRGB(255, 115, 115), 0.2, 1)
+			self.PanicButton:SetAttribute("BaseText", "ACTIVAR MODO PÁNICO")
+			self.PanicButton:SetAttribute("IsActive", false)
+			self.PanicButton:SetAttribute("HexaNoFavorite", true)
+			addHover(self.PanicButton, Theme.Danger, Color3.fromRGB(238, 70, 70), Color3.fromRGB(185, 35, 35))
+			self:connect(self.PanicButton.MouseButton1Click, function()
+				self:panic()
+				self.PanicButton.Text = Lang.Current == "EN" and "ALL FEATURES DISABLED" or "TODAS LAS FUNCIONES DESACTIVADAS"
+				task.delay(1.6, function()
+					if self.PanicButton and self.PanicButton.Parent then
+						self.PanicButton.Text = tostring(self.PanicButton:GetAttribute("BaseText") or "ACTIVAR MODO PÁNICO")
+					end
+				end)
+			end)
+		end
 
+		function X:setupMisc()
+			self.AutomationCard, self.AutomationTitle = self:makeCard(140, "AUTOMATIZACIÓN")
+			self.AutomationCard.LayoutOrder = 70
+			self.AutoRespawnButton = createToggleButton(self.AutomationCard, "REAPARICIÓN AUTOMÁTICA", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+			self.AutoEquipButton = createToggleButton(self.AutomationCard, "EQUIPAR HERRAMIENTA AUTOMÁTICAMENTE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+
+			self.SystemCard, self.SystemTitle = self:makeCard(232, "SISTEMA Y UTILIDADES")
+			self.SystemCard.LayoutOrder = 71
+			self.AntiAfkButton = createToggleButton(self.SystemCard, "ANTI AUSENCIA (AFK)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
+			self.ReconnectButton = neonButton(self.SystemCard, "RECONECTAR AL SERVIDOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
+			self.PerformanceButton = createToggleButton(self.SystemCard, "MODO RENDIMIENTO: CARTÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
+			self.StreamerButton = createToggleButton(self.SystemCard, "MODO TRANSMISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 182))
+
+			self:connect(self.AutoRespawnButton.MouseButton1Click, function()
+				self.AutoRespawn = not self.AutoRespawn
+				self:toggle(self.AutoRespawnButton, self.AutoRespawn)
+			end)
+			self:connect(self.AutoEquipButton.MouseButton1Click, function()
+				self.AutoEquip = not self.AutoEquip
+				self:toggle(self.AutoEquipButton, self.AutoEquip)
+			end)
 			self:connect(self.AntiAfkButton.MouseButton1Click, function()
 				self.AntiAfk = not self.AntiAfk
 				self:toggle(self.AntiAfkButton, self.AntiAfk)
@@ -3875,14 +5272,6 @@ task.spawn(function()
 				pcall(function()
 					TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
 				end)
-			end)
-			self:connect(self.AutoRespawnButton.MouseButton1Click, function()
-				self.AutoRespawn = not self.AutoRespawn
-				self:toggle(self.AutoRespawnButton, self.AutoRespawn)
-			end)
-			self:connect(self.AutoEquipButton.MouseButton1Click, function()
-				self.AutoEquip = not self.AutoEquip
-				self:toggle(self.AutoEquipButton, self.AutoEquip)
 			end)
 			self:connect(self.PerformanceButton.MouseButton1Click, function()
 				self.Performance = not self.Performance
@@ -3895,21 +5284,6 @@ task.spawn(function()
 				self:toggle(self.StreamerButton, self.Streamer)
 				self:applyStreamer()
 			end)
-			self:connect(self.AutoClickerButton.MouseButton1Click, function()
-				if not requireVip() then return end
-				self.AutoClicker = not self.AutoClicker
-				self.LastAutoClick = 0
-				self:toggle(self.AutoClickerButton, self.AutoClicker)
-			end)
-			self:connect(self.PanicButton.MouseButton1Click, function()
-				self:panic()
-				self.PanicButton.Text = "TODAS LAS FUNCIONES DESACTIVADAS"
-				task.delay(1.6, function()
-					if self.PanicButton and self.PanicButton.Parent then
-						self.PanicButton.Text = "ACTIVAR MODO PÁNICO"
-					end
-				end)
-			end)
 			self:connect(game.DescendantAdded, function(object)
 				if not self.Performance then return end
 				task.defer(function()
@@ -3920,8 +5294,6 @@ task.spawn(function()
 				self.AntiAfk = false
 				self.AutoRespawn = false
 				self.AutoEquip = false
-				self.AutoClicker = false
-				self.LastAutoClick = 0
 				self.Performance = false
 				self.PerformanceGeneration += 1
 				self.Streamer = false
@@ -3930,44 +5302,9 @@ task.spawn(function()
 				self:toggle(self.AntiAfkButton, false)
 				self:toggle(self.AutoRespawnButton, false)
 				self:toggle(self.AutoEquipButton, false)
-				self:toggle(self.AutoClickerButton, false)
 				self:toggle(self.PerformanceButton, false)
 				self:toggle(self.StreamerButton, false)
 			end)
-		end
-
-		function X:getAutoClickPosition()
-			local camera = workspace.CurrentCamera
-			if MOBILE_DEVICE and camera then return camera.ViewportSize / 2 end
-			return UserInputService:GetMouseLocation()
-		end
-
-		function X:performAutoClick()
-			if not MOBILE_DEVICE and type(mouse1click) == "function" then
-				pcall(mouse1click)
-				return
-			end
-			local camera = workspace.CurrentCamera
-			local clickPosition = self:getAutoClickPosition()
-			pcall(function()
-				VirtualUser:CaptureController()
-				VirtualUser:Button1Down(clickPosition, camera and camera.CFrame or CFrame.new())
-				task.defer(function()
-					pcall(function()
-						VirtualUser:Button1Up(clickPosition, camera and camera.CFrame or CFrame.new())
-					end)
-				end)
-			end)
-		end
-
-		function X:updateAutoClicker(now)
-			if not self.AutoClicker or not HEXA_IS_VIP then return end
-			local cps = math.clamp(self.AutoClickCps, 1, 100)
-			if now - self.LastAutoClick < (1 / cps) then return end
-			local clickPosition = self:getAutoClickPosition()
-			if self:isPointerOverInterface(clickPosition) then return end
-			self.LastAutoClick = now
-			self:performAutoClick()
 		end
 
 		function X:cachePerformanceProperty(object, propertyName)
@@ -4305,7 +5642,6 @@ task.spawn(function()
 				self:updatePlayerTools(now)
 				self:updateInfo(now)
 				self:updateAutoEquip(now)
-				self:updateAutoClicker(now)
 			end)
 			self:connect(UserInputService.InputBegan, function(input, processed)
 				if processed then return end
@@ -4346,6 +5682,7 @@ task.spawn(function()
 			end)
 		end
 
+		pcall(function() X:setupSafety() end)
 		pcall(function() X:setupCrosshair() end)
 		pcall(function() X:setupMovementExtra() end)
 		pcall(function() X:setupPlayerVisuals() end)
@@ -4355,12 +5692,13 @@ task.spawn(function()
 		pcall(function() X:setupMisc() end)
 		pcall(function() X:setupPersonalization() end)
 		addVipStateListener(function(isVip)
-			if isVip then return end
+			if isVip then
+				return
+			end
 			X.NoFall = false
 			X.Spectating = false
 			X.MouseTeleport = false
 			X.MouseTeleportArmedAt = 0
-			X.AutoClicker = false
 			X.CrosshairRainbow = false
 			X.CrosshairStyle = "CRUZ"
 			X.CrosshairColorIndex = 1
@@ -4373,7 +5711,6 @@ task.spawn(function()
 			pcall(function() X:toggle(X.NoFallButton, false) end)
 			pcall(function() X:toggle(X.SpectateButton, false) end)
 			pcall(function() X:toggle(X.MouseTeleportButton, false) end)
-			pcall(function() X:toggle(X.AutoClickerButton, false) end)
 			pcall(function() X:toggle(X.CrosshairRainbowButton, false) end)
 			pcall(function() X.CrosshairStyleButton.Text = "TIPO DE MIRA: CRUZ" end)
 			pcall(function() X.CrosshairColorButton.Text = "COLOR DE LA MIRA: BLANCO" end)
