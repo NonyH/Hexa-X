@@ -1,4 +1,4 @@
-getgenv().vex_key = "5bc038c59f6d98922401b107"
+getgenv().vex_key = "hxny1231-1231"
 
 local VexSDK = loadstring(game:HttpGet("https://vexbin.lol/vexlytics/sdk/main.lua"))()
 VexSDK.script_id = "5bdf3b08"
@@ -11,7 +11,3 @@ if status.code == "KEY_VALID" then
 else
     game.Players.LocalPlayer:Kick(status.message)
 end
-
--- Option B: Auto login UI (replaces Option A)
--- local result = VexSDK.login({ title = "My Script", subtitle = "Enter your key" })
--- VexSDK.load_script()
