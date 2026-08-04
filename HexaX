@@ -268,26 +268,82 @@ local Theme = {
 
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
-local GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
-local MOBILE_DEVICE = UserInputService.TouchEnabled and (not UserInputService.KeyboardEnabled or GUI_VIEWPORT_SIZE.X < 900)
+
+local function getViewportSize()
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize
+	if viewport and viewport.X > 0 and viewport.Y > 0 then return viewport end
+	return Vector2.new(800, 600)
+end
+
+local GUI_VIEWPORT_SIZE = getViewportSize()
+-- Algunos ejecutores móviles informan que hay teclado disponible. Por eso la
+-- detección no depende únicamente de KeyboardEnabled ni de un ancho fijo.
+local MOBILE_DEVICE = UserInputService.TouchEnabled and (
+	not UserInputService.MouseEnabled
+	or not UserInputService.KeyboardEnabled
+	or math.min(GUI_VIEWPORT_SIZE.X, GUI_VIEWPORT_SIZE.Y) <= 700
+	or GUI_VIEWPORT_SIZE.X <= 1100
+)
+
+local MOBILE_MARGIN = MOBILE_DEVICE and 8 or 12
+local HEADER_HEIGHT = MOBILE_DEVICE and 90 or 106
+local MOBILE_NAV_HEIGHT = MOBILE_DEVICE and 56 or 0
+local CONTENT_TOP = MOBILE_DEVICE and (HEADER_HEIGHT + MOBILE_NAV_HEIGHT + 2) or 108
+local RESTORE_BUTTON_SIZE = MOBILE_DEVICE and 48 or 58
+
 local function calculateMainSize()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	return UDim2.fromOffset(
-		math.min(600, math.max(270, viewport.X - 12)),
-		math.min(430, math.max(270, viewport.Y - 12))
-	)
+	local viewport = getViewportSize()
+	local maxWidth = MOBILE_DEVICE and 520 or 600
+	local maxHeight = MOBILE_DEVICE and 420 or 430
+	local availableWidth = math.max(260, viewport.X - MOBILE_MARGIN * 2)
+	local availableHeight = math.max(280, viewport.Y - MOBILE_MARGIN * 2)
+	return UDim2.fromOffset(math.min(maxWidth, availableWidth), math.min(maxHeight, availableHeight))
 end
+
 local function calculateKeySize()
-	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	return UDim2.fromOffset(
-		math.min(340, math.max(250, viewport.X - 12)),
-		math.min(230, math.max(210, viewport.Y - 12))
-	)
+	local viewport = getViewportSize()
+	local availableWidth = math.max(250, viewport.X - MOBILE_MARGIN * 2)
+	local availableHeight = math.max(210, viewport.Y - MOBILE_MARGIN * 2)
+	return UDim2.fromOffset(math.min(340, availableWidth), math.min(MOBILE_DEVICE and 220 or 230, availableHeight))
 end
+
 local MAIN_SIZE = calculateMainSize()
 local KEY_SIZE = calculateKeySize()
 
 local isInteractingWithSlider = false
+local SliderDrag = {Input = nil, Update = nil, Finish = nil}
+
+local function finishActiveSliderDrag()
+	local finish = SliderDrag.Finish
+	SliderDrag.Input = nil
+	SliderDrag.Update = nil
+	SliderDrag.Finish = nil
+	if finish then pcall(finish) end
+end
+
+UserInputService.InputChanged:Connect(function(input)
+	local activeInput = SliderDrag.Input
+	local update = SliderDrag.Update
+	if not activeInput or not update then return end
+
+	local valid = false
+	if activeInput.UserInputType == Enum.UserInputType.Touch then
+		valid = input == activeInput
+	elseif activeInput.UserInputType == Enum.UserInputType.MouseButton1 then
+		valid = input.UserInputType == Enum.UserInputType.MouseMovement
+	end
+	if valid then update(input) end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	local activeInput = SliderDrag.Input
+	if not activeInput then return end
+	if input == activeInput
+		or (activeInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1) then
+		finishActiveSliderDrag()
+	end
+end)
 local Lang = {Current = "ES"}
 local UI_READY = false
 local applySearchFilter = function() end
@@ -322,38 +378,58 @@ end
 local function makeDraggable(frame: GuiObject, handle: GuiObject?)
 	local dragTarget = handle or frame
 	local dragging = false
-	local dragInput: InputObject? = nil
+	local activeInput: InputObject? = nil
 	local dragStart: Vector2? = nil
 	local startPos: UDim2? = nil
 
+	local function clampPosition(position: UDim2)
+		local parentSize = getViewportSize()
+		if frame.Parent and frame.Parent:IsA("GuiObject") then
+			parentSize = frame.Parent.AbsoluteSize
+		end
+		local frameSize = frame.AbsoluteSize
+		local anchor = frame.AnchorPoint
+		local margin = MOBILE_DEVICE and 4 or 2
+		local minX = frameSize.X * anchor.X - parentSize.X * position.X.Scale + margin
+		local maxX = parentSize.X - frameSize.X * (1 - anchor.X) - parentSize.X * position.X.Scale - margin
+		local minY = frameSize.Y * anchor.Y - parentSize.Y * position.Y.Scale + margin
+		local maxY = parentSize.Y - frameSize.Y * (1 - anchor.Y) - parentSize.Y * position.Y.Scale - margin
+		return UDim2.new(
+			position.X.Scale,
+			math.clamp(position.X.Offset, math.min(minX, maxX), math.max(minX, maxX)),
+			position.Y.Scale,
+			math.clamp(position.Y.Offset, math.min(minY, maxY), math.max(minY, maxY))
+		)
+	end
+
+	dragTarget.Active = true
 	dragTarget.InputBegan:Connect(function(input)
-		if isInteractingWithSlider then return end 
-
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = frame.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-
-	dragTarget.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
+		if isInteractingWithSlider then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		dragging = true
+		activeInput = input
+		dragStart = input.Position
+		startPos = frame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+				activeInput = nil
+			end
+		end)
 	end)
 
 	UserInputService.InputChanged:Connect(function(input)
-		if dragging and dragInput and input == dragInput and dragStart and startPos then
-			local delta = input.Position - dragStart
-			tween(frame, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-			})
-		end
+		if not dragging or not activeInput or not dragStart or not startPos then return end
+		local valid = activeInput.UserInputType == Enum.UserInputType.Touch and input == activeInput
+			or activeInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement
+		if not valid then return end
+		local delta = input.Position - dragStart
+		frame.Position = clampPosition(UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		))
 	end)
 end
 
@@ -662,8 +738,6 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 	hitbox.ZIndex = 9
 	hitbox.Parent = shell
 
-	local dragging = false
-
 	local function effectiveMax()
 		if HEXA_IS_VIP then return originalMax end
 		local freeLimit = tonumber(freeMaximum) or 400
@@ -716,35 +790,28 @@ local function createSlider(parent: Instance, title: string, minVal: number, max
 		controller.Refresh()
 	end
 
+	local function finishDragging()
+		limitNoticeShown = false
+		isInteractingWithSlider = false
+		tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(7, 24)})
+		tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06})
+	end
+
 	hitbox.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			if vipOnly and not HEXA_IS_VIP then
-				requireVip()
-				return
-			end
-			limitNoticeShown = false
-			isInteractingWithSlider = true
-			dragging = true
-			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(9, 28)})
-			tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
-			setFromInput(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+		if vipOnly and not HEXA_IS_VIP then
+			requireVip()
+			return
 		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			setFromInput(input)
-		end
-	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-			limitNoticeShown = false
-			isInteractingWithSlider = false
-			tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(7, 24)})
-			tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06})
-		end
+		if SliderDrag.Finish then finishActiveSliderDrag() end
+		limitNoticeShown = false
+		isInteractingWithSlider = true
+		SliderDrag.Input = input
+		SliderDrag.Update = setFromInput
+		SliderDrag.Finish = finishDragging
+		tween(marker, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(9, 28)})
+		tween(valuePill, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
+		setFromInput(input)
 	end)
 
 	if vipOnly then markVipControl(container) end
@@ -810,7 +877,7 @@ end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "HexaX"
-ScreenGui.IgnoreGuiInset = true
+ScreenGui.IgnoreGuiInset = not MOBILE_DEVICE
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 2147483647
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -1419,7 +1486,7 @@ local GetKeyBtn = neonButton(KeyFrame, "Obtener clave (Discord)", UDim2.new(0.5,
 
 Lang.Button = neonButton(KeyFrame, "IDIOMA: ESPAÑOL", UDim2.new(1, -40, 0, 38), UDim2.new(0, 20, 0, 165))
 Lang.Button:SetAttribute("HexaNoTranslate", true)
-Lang.Button.MouseButton1Click:Connect(function()
+Lang.Button.Activated:Connect(function()
 	Lang.Set(Lang.Current == "ES" and "EN" or "ES")
 end)
 
@@ -1486,6 +1553,10 @@ Snow.Background.Parent = MainFrame
 function Snow.start()
 	if Snow.started or not Snow.Background.Parent then return end
 	Snow.started = true
+	if MOBILE_DEVICE then
+		Snow.Background.Visible = false
+		return
+	end
 
 	local ok = pcall(function()
 		local random = Random.new()
@@ -1556,7 +1627,7 @@ local Header = Instance.new("Frame")
 Header.BackgroundColor3 = Theme.Panel
 Header.BackgroundTransparency = 0.30
 Header.BorderSizePixel = 0
-Header.Size = UDim2.new(1, 0, 0, 106)
+Header.Size = UDim2.new(1, 0, 0, HEADER_HEIGHT)
 Header.ZIndex = 4
 Header.Parent = MainFrame
 
@@ -1570,8 +1641,8 @@ HeaderGlow.Parent = Header
 
 local Title = Instance.new("TextLabel")
 Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, MOBILE_DEVICE and 14 or 20, 0, 8)
-Title.Size = UDim2.new(0, MOBILE_DEVICE and 48 or 68, 0, 28)
+Title.Position = UDim2.new(0, MOBILE_DEVICE and 12 or 20, 0, MOBILE_DEVICE and 5 or 8)
+Title.Size = UDim2.new(0, MOBILE_DEVICE and 52 or 68, 0, MOBILE_DEVICE and 25 or 28)
 Title.Text = "HexaX"
 Title.TextColor3 = Theme.TextMain
 Title.TextSize = MOBILE_DEVICE and 15 or 19
@@ -1583,8 +1654,8 @@ Title:SetAttribute("HexaNoTranslate", true)
 makeDraggable(MainFrame, Title)
 
 local HeaderAccessBadge = Instance.new("TextLabel")
-HeaderAccessBadge.Position = UDim2.new(0, MOBILE_DEVICE and 63 or 92, 0, 13)
-HeaderAccessBadge.Size = UDim2.new(0, MOBILE_DEVICE and 30 or 48, 0, 19)
+HeaderAccessBadge.Position = UDim2.new(0, MOBILE_DEVICE and 66 or 92, 0, MOBILE_DEVICE and 9 or 13)
+HeaderAccessBadge.Size = UDim2.new(0, MOBILE_DEVICE and 34 or 48, 0, MOBILE_DEVICE and 18 or 19)
 HeaderAccessBadge.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 HeaderAccessBadge.BackgroundTransparency = 0.04
 HeaderAccessBadge.BorderSizePixel = 0
@@ -1600,8 +1671,8 @@ mkStroke(HeaderAccessBadge, Theme.Accent, 0.82, 1)
 
 local HeaderSubtitle = Instance.new("TextLabel")
 HeaderSubtitle.BackgroundTransparency = 1
-HeaderSubtitle.Position = UDim2.new(0, MOBILE_DEVICE and 14 or 20, 0, 36)
-HeaderSubtitle.Size = UDim2.new(0, MOBILE_DEVICE and 80 or 130, 0, 18)
+HeaderSubtitle.Position = UDim2.new(0, MOBILE_DEVICE and 12 or 20, 0, MOBILE_DEVICE and 29 or 36)
+HeaderSubtitle.Size = UDim2.new(0, MOBILE_DEVICE and 100 or 130, 0, 16)
 HeaderSubtitle.Text = "aimbot universal"
 HeaderSubtitle.TextColor3 = Color3.fromRGB(210, 210, 210)
 HeaderSubtitle.TextTransparency = 0.26
@@ -1628,34 +1699,36 @@ end
 addVipStateListener(refreshHeaderAccessBadge)
 refreshHeaderAccessBadge()
 
-local CloseButton = neonButton(Header, "X", UDim2.new(0, 34, 0, 34), UDim2.new(1, -46, 0, 12), 4)
+local headerButtonSize = MOBILE_DEVICE and 28 or 34
+local headerButtonY = MOBILE_DEVICE and 7 or 12
+local CloseButton = neonButton(Header, "X", UDim2.fromOffset(headerButtonSize, headerButtonSize), MOBILE_DEVICE and UDim2.new(1, -35, 0, headerButtonY) or UDim2.new(1, -46, 0, headerButtonY), 4)
 CloseButton.TextColor3 = Theme.Danger
 CloseButton.BackgroundColor3 = Theme.Panel2
 
-local MinButton = neonButton(Header, "-", UDim2.new(0, 34, 0, 34), UDim2.new(1, -86, 0, 12), 4)
+local MinButton = neonButton(Header, "-", UDim2.fromOffset(headerButtonSize, headerButtonSize), MOBILE_DEVICE and UDim2.new(1, -68, 0, headerButtonY) or UDim2.new(1, -86, 0, headerButtonY), 4)
 MinButton.TextColor3 = Theme.TextOff
 MinButton.BackgroundColor3 = Theme.Panel2
 MinButton:SetAttribute("HexaNoFavorite", true)
 CloseButton:SetAttribute("HexaNoFavorite", true)
 
-local TutorialBtn = neonButton(Header, "?", UDim2.new(0, 34, 0, 34), UDim2.new(1, -126, 0, 12), 4)
+local TutorialBtn = neonButton(Header, "?", UDim2.fromOffset(headerButtonSize, headerButtonSize), MOBILE_DEVICE and UDim2.new(1, -101, 0, headerButtonY) or UDim2.new(1, -126, 0, headerButtonY), 4)
 TutorialBtn.TextColor3 = Theme.TextOff
 TutorialBtn.BackgroundColor3 = Theme.Panel2
 TutorialBtn:SetAttribute("HexaNoFavorite", true)
 
-Lang.MainButton = neonButton(Header, "ES", UDim2.new(0, 42, 0, 34), UDim2.new(1, -176, 0, 12), 4)
+Lang.MainButton = neonButton(Header, "ES", MOBILE_DEVICE and UDim2.fromOffset(34, 28) or UDim2.new(0, 42, 0, 34), MOBILE_DEVICE and UDim2.new(1, -140, 0, headerButtonY) or UDim2.new(1, -176, 0, headerButtonY), 4)
 Lang.MainButton.TextColor3 = Theme.TextOff
 Lang.MainButton.BackgroundColor3 = Theme.Panel2
 Lang.MainButton:SetAttribute("HexaNoTranslate", true)
 Lang.MainButton:SetAttribute("HexaNoFavorite", true)
-Lang.MainButton.MouseButton1Click:Connect(function()
+Lang.MainButton.Activated:Connect(function()
 	Lang.Set(Lang.Current == "ES" and "EN" or "ES")
 end)
 
 local SearchContainer = Instance.new("Frame")
 SearchContainer.Name = "HexaSearchContainer"
-SearchContainer.Position = UDim2.new(0, 20, 0, 61)
-SearchContainer.Size = UDim2.new(1, -40, 0, 34)
+SearchContainer.Position = UDim2.new(0, MOBILE_DEVICE and 12 or 20, 0, MOBILE_DEVICE and 49 or 61)
+SearchContainer.Size = UDim2.new(1, MOBILE_DEVICE and -24 or -40, 0, MOBILE_DEVICE and 31 or 34)
 SearchContainer.BackgroundColor3 = Theme.Panel2
 SearchContainer.BackgroundTransparency = 0.06
 SearchContainer.BorderSizePixel = 0
@@ -1682,8 +1755,18 @@ Lang.Set(Lang.Current)
 local OwnerVipButton = nil
 local OwnerFrame = nil
 if HEXA_IS_OWNER then
-	Title.Size = UDim2.new(1, -274, 0, 58)
-	OwnerVipButton = neonButton(Header, "★ VIP", UDim2.new(0, 58, 0, 34), UDim2.new(1, -246, 0, 12), 4)
+	Title.Size = MOBILE_DEVICE and UDim2.new(0, 52, 0, 25) or UDim2.new(1, -274, 0, 58)
+	OwnerVipButton = neonButton(
+		Header,
+		"★ VIP",
+		MOBILE_DEVICE and UDim2.fromOffset(30, 28) or UDim2.new(0, 58, 0, 34),
+		MOBILE_DEVICE and UDim2.new(1, -176, 0, 7) or UDim2.new(1, -246, 0, 12),
+		4
+	)
+	if MOBILE_DEVICE then
+		OwnerVipButton.Text = "★"
+		OwnerVipButton:SetAttribute("BaseText", "★")
+	end
 	OwnerVipButton.TextColor3 = Color3.fromRGB(255, 211, 46)
 	OwnerVipButton.BackgroundColor3 = Color3.fromRGB(40, 34, 15)
 	mkStroke(OwnerVipButton, Color3.fromRGB(255, 211, 46), 0.2, 1)
@@ -1860,17 +1943,26 @@ if HEXA_IS_OWNER then
 	refreshOwnerPanel()
 end
 
-local RestoreOrb = Instance.new("ImageButton")
+local RestoreOrb = Instance.new("TextButton")
+RestoreOrb.Name = "HexaMobileRestoreButton"
 RestoreOrb.Visible = false
+RestoreOrb.AnchorPoint = Vector2.new(0, 0.5)
 RestoreOrb.Size = UDim2.new(0, 0, 0, 0)
-RestoreOrb.Position = UDim2.new(0, 18, 0.2, 0)
+RestoreOrb.Position = UDim2.new(0, MOBILE_DEVICE and 10 or 18, 0.5, 0)
 RestoreOrb.BackgroundColor3 = Theme.Panel2
-RestoreOrb.BackgroundTransparency = 1 
+RestoreOrb.BackgroundTransparency = 0.06
 RestoreOrb.BorderSizePixel = 0
-RestoreOrb.Image = "rbxassetid://123138803129747" 
-RestoreOrb.ScaleType = Enum.ScaleType.Fit
+RestoreOrb.Text = "HX"
+RestoreOrb.TextColor3 = Theme.TextOff
+RestoreOrb.TextSize = MOBILE_DEVICE and 13 or 15
+RestoreOrb.Font = Enum.Font.GothamBold
 RestoreOrb.AutoButtonColor = false
+RestoreOrb.ZIndex = 180
 RestoreOrb.Parent = ScreenGui
+RestoreOrb:SetAttribute("HexaNoTranslate", true)
+RestoreOrb:SetAttribute("HexaNoFavorite", true)
+mkCorner(RestoreOrb, MOBILE_DEVICE and 14 or 18)
+mkStroke(RestoreOrb, Theme.Accent, 0.28, 2)
 makeDraggable(RestoreOrb, RestoreOrb)
 
 local SIDEBAR_WIDTH = MOBILE_DEVICE and 92 or 136
@@ -1879,15 +1971,15 @@ local SIDEBAR_PROFILE_MARGIN = 10
 local ACTIVE_CATEGORY = "COMBAT"
 local CategoryButtons = {}
 local CategoryDefinitions = {
-	{Id = "COMBAT", ES = "COMBATE", EN = "COMBAT", Icon = "combat"},
-	{Id = "VISUALS", ES = "VISUALES", EN = "VISUALS", Icon = "visuals"},
-	{Id = "MOVEMENT", ES = "MOVIMIENTO", EN = "MOVEMENT", Icon = "movement"},
-	{Id = "PLAYER", ES = "JUGADOR", EN = "PLAYER", Icon = "player"},
-	{Id = "VEHICLES", ES = "VEHÍCULOS", EN = "VEHICLES", Icon = "vehicle"},
-	{Id = "TELEPORT", ES = "TELETRANSPORTE", EN = "TELEPORT", Icon = "teleport"},
-	{Id = "SYSTEM", ES = "SISTEMA", EN = "SYSTEM", Icon = "system"},
-	{Id = "CUSTOMIZE", ES = "PERSONALIZAR", EN = "CUSTOMIZE", Icon = "customize"},
-	{Id = "COMMUNITY", ES = "COMUNIDAD", EN = "COMMUNITY", Icon = "community"},
+	{Id = "COMBAT", ES = "COMBATE", EN = "COMBAT", MobileES = "COMBATE", MobileEN = "COMBAT", Icon = "combat"},
+	{Id = "VISUALS", ES = "VISUALES", EN = "VISUALS", MobileES = "ESP", MobileEN = "ESP", Icon = "visuals"},
+	{Id = "MOVEMENT", ES = "MOVIMIENTO", EN = "MOVEMENT", MobileES = "MOV.", MobileEN = "MOVE", Icon = "movement"},
+	{Id = "PLAYER", ES = "JUGADOR", EN = "PLAYER", MobileES = "JUGADOR", MobileEN = "PLAYER", Icon = "player"},
+	{Id = "VEHICLES", ES = "VEHÍCULOS", EN = "VEHICLES", MobileES = "VEHÍC.", MobileEN = "VEH.", Icon = "vehicle"},
+	{Id = "TELEPORT", ES = "TELETRANSPORTE", EN = "TELEPORT", MobileES = "TP", MobileEN = "TP", Icon = "teleport"},
+	{Id = "SYSTEM", ES = "SISTEMA", EN = "SYSTEM", MobileES = "SISTEMA", MobileEN = "SYSTEM", Icon = "system"},
+	{Id = "CUSTOMIZE", ES = "PERSONALIZAR", EN = "CUSTOMIZE", MobileES = "UI", MobileEN = "UI", Icon = "customize"},
+	{Id = "COMMUNITY", ES = "COMUNIDAD", EN = "COMMUNITY", MobileES = "RED", MobileEN = "SOCIAL", Icon = "community"},
 }
 local CategoryById = {}
 for _, category in ipairs(CategoryDefinitions) do
@@ -1896,24 +1988,26 @@ end
 
 local CategorySidebar = Instance.new("ScrollingFrame")
 CategorySidebar.Name = "HexaCategorySidebar"
-CategorySidebar.Position = UDim2.new(0, 0, 0, 108)
-CategorySidebar.Size = UDim2.new(0, SIDEBAR_WIDTH, 1, -(108 + SIDEBAR_PROFILE_HEIGHT + SIDEBAR_PROFILE_MARGIN))
+CategorySidebar.Position = MOBILE_DEVICE and UDim2.new(0, 0, 0, HEADER_HEIGHT) or UDim2.new(0, 0, 0, 108)
+CategorySidebar.Size = MOBILE_DEVICE
+	and UDim2.new(1, 0, 0, MOBILE_NAV_HEIGHT)
+	or UDim2.new(0, SIDEBAR_WIDTH, 1, -(108 + SIDEBAR_PROFILE_HEIGHT + SIDEBAR_PROFILE_MARGIN))
 CategorySidebar.BackgroundColor3 = Theme.Panel
 CategorySidebar.BackgroundTransparency = 0.18
 CategorySidebar.BorderSizePixel = 0
 CategorySidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
-CategorySidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
-CategorySidebar.ScrollBarThickness = MOBILE_DEVICE and 2 or 3
+CategorySidebar.AutomaticCanvasSize = MOBILE_DEVICE and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
+CategorySidebar.ScrollBarThickness = MOBILE_DEVICE and 0 or 3
 CategorySidebar.ScrollBarImageColor3 = Theme.Accent
 CategorySidebar.ScrollBarImageTransparency = 0.55
-CategorySidebar.ScrollingDirection = Enum.ScrollingDirection.Y
+CategorySidebar.ScrollingDirection = MOBILE_DEVICE and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
 CategorySidebar.ZIndex = 3
 CategorySidebar.Parent = MainFrame
 
 local SidebarDivider = Instance.new("Frame")
 SidebarDivider.AnchorPoint = Vector2.new(0, 0)
-SidebarDivider.Position = UDim2.new(0, SIDEBAR_WIDTH - 1, 0, 108)
-SidebarDivider.Size = UDim2.new(0, 1, 1, -108)
+SidebarDivider.Position = MOBILE_DEVICE and UDim2.new(0, 0, 0, CONTENT_TOP - 1) or UDim2.new(0, SIDEBAR_WIDTH - 1, 0, 108)
+SidebarDivider.Size = MOBILE_DEVICE and UDim2.new(1, 0, 0, 1) or UDim2.new(0, 1, 1, -108)
 SidebarDivider.BackgroundColor3 = Theme.Accent
 SidebarDivider.BackgroundTransparency = 0.82
 SidebarDivider.BorderSizePixel = 0
@@ -1921,14 +2015,17 @@ SidebarDivider.ZIndex = 5
 SidebarDivider.Parent = MainFrame
 
 local SidebarPadding = Instance.new("UIPadding")
-SidebarPadding.PaddingTop = UDim.new(0, 10)
-SidebarPadding.PaddingBottom = UDim.new(0, 8)
-SidebarPadding.PaddingLeft = UDim.new(0, MOBILE_DEVICE and 7 or 8)
-SidebarPadding.PaddingRight = UDim.new(0, MOBILE_DEVICE and 7 or 9)
+SidebarPadding.PaddingTop = UDim.new(0, MOBILE_DEVICE and 6 or 10)
+SidebarPadding.PaddingBottom = UDim.new(0, MOBILE_DEVICE and 6 or 8)
+SidebarPadding.PaddingLeft = UDim.new(0, MOBILE_DEVICE and 8 or 8)
+SidebarPadding.PaddingRight = UDim.new(0, MOBILE_DEVICE and 8 or 9)
 SidebarPadding.Parent = CategorySidebar
 
 local SidebarLayout = Instance.new("UIListLayout")
-SidebarLayout.Padding = UDim.new(0, 7)
+SidebarLayout.FillDirection = MOBILE_DEVICE and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
+SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+SidebarLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+SidebarLayout.Padding = UDim.new(0, MOBILE_DEVICE and 6 or 7)
 SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
 SidebarLayout.Parent = CategorySidebar
 
@@ -1942,6 +2039,7 @@ SidebarProfileCard.BackgroundTransparency = 0.10
 SidebarProfileCard.BorderSizePixel = 0
 SidebarProfileCard.ZIndex = 8
 SidebarProfileCard.Parent = MainFrame
+SidebarProfileCard.Visible = not MOBILE_DEVICE
 mkCorner(SidebarProfileCard, 10)
 mkStroke(SidebarProfileCard, Theme.Accent, 0.72, 1)
 
@@ -2080,8 +2178,8 @@ end
 local Content = Instance.new("ScrollingFrame")
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
-Content.Position = UDim2.new(0, SIDEBAR_WIDTH, 0, 108)
-Content.Size = UDim2.new(1, -SIDEBAR_WIDTH, 1, -108)
+Content.Position = MOBILE_DEVICE and UDim2.new(0, 0, 0, CONTENT_TOP) or UDim2.new(0, SIDEBAR_WIDTH, 0, 108)
+Content.Size = MOBILE_DEVICE and UDim2.new(1, 0, 1, -CONTENT_TOP) or UDim2.new(1, -SIDEBAR_WIDTH, 1, -108)
 Content.ScrollBarThickness = MOBILE_DEVICE and 5 or 4
 Content.ScrollBarImageColor3 = Theme.Accent
 Content.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -2105,7 +2203,7 @@ Layout.Parent = Content
 local CategoryHeader = Instance.new("Frame")
 CategoryHeader.Name = "HexaCategoryHeader"
 CategoryHeader.LayoutOrder = -100
-CategoryHeader.Size = UDim2.new(1, 0, 0, 40)
+CategoryHeader.Size = UDim2.new(1, 0, 0, MOBILE_DEVICE and 34 or 40)
 CategoryHeader.BackgroundColor3 = Theme.Panel
 CategoryHeader.BackgroundTransparency = 0.24
 CategoryHeader.BorderSizePixel = 0
@@ -2150,7 +2248,7 @@ for index, category in ipairs(CategoryDefinitions) do
 	local button = Instance.new("TextButton")
 	button.Name = "Category_" .. category.Id
 	button.LayoutOrder = index
-	button.Size = UDim2.new(1, 0, 0, MOBILE_DEVICE and 43 or 36)
+	button.Size = MOBILE_DEVICE and UDim2.fromOffset(64, 44) or UDim2.new(1, 0, 0, 36)
 	button.BackgroundColor3 = Theme.Panel
 	button.BackgroundTransparency = 0.14
 	button.BorderSizePixel = 0
@@ -2164,8 +2262,8 @@ for index, category in ipairs(CategoryDefinitions) do
 
 	local indicator = Instance.new("Frame")
 	indicator.Name = "ActiveIndicator"
-	indicator.Position = UDim2.new(0, 0, 0, 6)
-	indicator.Size = UDim2.new(0, 3, 1, -12)
+	indicator.Position = MOBILE_DEVICE and UDim2.new(0, 7, 1, -3) or UDim2.new(0, 0, 0, 6)
+	indicator.Size = MOBILE_DEVICE and UDim2.new(1, -14, 0, 3) or UDim2.new(0, 3, 1, -12)
 	indicator.BackgroundColor3 = Theme.Accent
 	indicator.BackgroundTransparency = 1
 	indicator.BorderSizePixel = 0
@@ -2175,8 +2273,8 @@ for index, category in ipairs(CategoryDefinitions) do
 
 	local iconHolder = Instance.new("Frame")
 	iconHolder.Name = "CategoryIcon"
-	iconHolder.AnchorPoint = Vector2.new(0, 0.5)
-	iconHolder.Position = MOBILE_DEVICE and UDim2.new(0.5, -10, 0.5, 0) or UDim2.new(0, 11, 0.5, 0)
+	iconHolder.AnchorPoint = MOBILE_DEVICE and Vector2.new(0.5, 0) or Vector2.new(0, 0.5)
+	iconHolder.Position = MOBILE_DEVICE and UDim2.new(0.5, 0, 0, 4) or UDim2.new(0, 11, 0.5, 0)
 	iconHolder.Size = UDim2.fromOffset(20, 20)
 	iconHolder.BackgroundTransparency = 1
 	iconHolder.ZIndex = 7
@@ -2186,15 +2284,15 @@ for index, category in ipairs(CategoryDefinitions) do
 	local label = Instance.new("TextLabel")
 	label.Name = "CategoryLabel"
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.new(0, 39, 0, 0)
-	label.Size = UDim2.new(1, -45, 1, 0)
+	label.Position = MOBILE_DEVICE and UDim2.new(0, 4, 0, 25) or UDim2.new(0, 39, 0, 0)
+	label.Size = MOBILE_DEVICE and UDim2.new(1, -8, 0, 14) or UDim2.new(1, -45, 1, 0)
 	label.Text = category.ES
 	label.TextColor3 = Theme.TextMain
-	label.TextSize = 10
+	label.TextSize = MOBILE_DEVICE and 8 or 10
 	label.Font = Enum.Font.GothamSemibold
-	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextXAlignment = MOBILE_DEVICE and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
 	label.TextTruncate = Enum.TextTruncate.AtEnd
-	label.Visible = not MOBILE_DEVICE
+	label.Visible = true
 	label.ZIndex = 7
 	label:SetAttribute("HexaNoTranslate", true)
 	label.Parent = button
@@ -2224,7 +2322,7 @@ for index, category in ipairs(CategoryDefinitions) do
 			})
 		end
 	end)
-	button.MouseButton1Click:Connect(function()
+	button.Activated:Connect(function()
 		selectCategory(category.Id)
 	end)
 end
@@ -2238,7 +2336,11 @@ refreshCategoryNavigation = function()
 
 	for categoryId, data in pairs(CategoryButtons) do
 		local active = categoryId == ACTIVE_CATEGORY and not searchActive
-		data.Label.Text = Lang.Current == "EN" and data.Definition.EN or data.Definition.ES
+		if MOBILE_DEVICE then
+			data.Label.Text = Lang.Current == "EN" and data.Definition.MobileEN or data.Definition.MobileES
+		else
+			data.Label.Text = Lang.Current == "EN" and data.Definition.EN or data.Definition.ES
+		end
 		data.Button.BackgroundColor3 = active and Theme.Panel2 or Theme.Panel
 		data.Button.BackgroundTransparency = active and 0.02 or 0.14
 		data.Label.TextColor3 = active and Theme.TextOff or Theme.TextMain
@@ -2883,7 +2985,7 @@ Tutorial.CloseButton:SetAttribute("HexaNoFavorite", true)
 
 do
 local function updateResponsiveLayout()
-	GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
+	GUI_VIEWPORT_SIZE = getViewportSize()
 	MAIN_SIZE = calculateMainSize()
 	KEY_SIZE = calculateKeySize()
 	VipNotification.Size = UDim2.fromOffset(math.min(390, math.max(250, GUI_VIEWPORT_SIZE.X - 16)), 82)
@@ -2988,8 +3090,8 @@ local function isKeyActive(targetKey: any): boolean
 end
 
 local HexaSharedTargetFilters = {
-	TeamCheck = true,
-	WallCheck = true,
+	TeamCheck = false,
+	WallCheck = false,
 	AimSmoothing = false,
 	TargetPrediction = false,
 	SmoothingFactor = 5,
@@ -4325,10 +4427,10 @@ task.spawn(function()
 		bindToggle(NameButton, "NameESP", function(enabled) if not enabled then renderEsp() end end)
 		bindToggle(HealthButton, "HealthESP", function(enabled) if not enabled then renderEsp() end end)
 
-		HexaSharedTargetFilters.WallCheck = true
-		HexaSharedTargetFilters:SetTeamCheck(true)
-		setActive(WallButton, true)
-		setActive(TeamButton, true)
+		HexaSharedTargetFilters.WallCheck = false
+		HexaSharedTargetFilters:SetTeamCheck(false)
+		setActive(WallButton, false)
+		setActive(TeamButton, false)
 
 		addVipStateListener(function(isVip)
 			if isVip or State.Dead then return end
@@ -4801,7 +4903,7 @@ local function animateOpen(gui: GuiObject, targetSize: UDim2, forcedStyle: strin
 	if gui == MainFrame then
 		task.defer(Snow.start)
 	end
-	local style = forcedStyle or openingStyle
+	local style = forcedStyle or (MOBILE_DEVICE and "QUAD" or openingStyle)
 	local targetPosition = gui.Position
 	local scale = getOpeningScale(gui)
 	gui.Visible = true
@@ -4884,12 +4986,15 @@ local function animateOpen(gui: GuiObject, targetSize: UDim2, forcedStyle: strin
 end
 
 local function openMainInterface()
+	pcall(function() KeyBox:ReleaseFocus() end)
 	KeyFrame.Visible = false
+	MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	MainFrame.Visible = true
-	animateOpen(MainFrame, MAIN_SIZE)
+	RestoreOrb.Visible = false
+	animateOpen(MainFrame, MAIN_SIZE, MOBILE_DEVICE and "QUAD" or nil)
 end
 
-CheckKeyBtn.MouseButton1Click:Connect(function()
+CheckKeyBtn.Activated:Connect(function()
 	local entered = tostring(KeyBox.Text or "")
 	local normalKey = entered == "h3xa-ny"
 	local vipCode, vipInfo = validateVipCode(entered, LocalPlayer.Name, LocalPlayer.UserId)
@@ -4899,8 +5004,15 @@ CheckKeyBtn.MouseButton1Click:Connect(function()
 			KeyBox.Text = ""
 			KeyBox.PlaceholderText = "¡VIP ACTIVADO!"
 		end
-		local t = tween(KeyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
-		t.Completed:Connect(openMainInterface)
+		local t = tween(KeyFrame, TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
+		local opened = false
+		local function finishOpen()
+			if opened then return end
+			opened = true
+			openMainInterface()
+		end
+		t.Completed:Connect(finishOpen)
+		task.delay(0.32, finishOpen)
 	else
 		KeyBox.Text = ""
 		if vipInfo and vipInfo.reason == "EXPIRED" then
@@ -4916,7 +5028,7 @@ CheckKeyBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
-GetKeyBtn.MouseButton1Click:Connect(function()
+GetKeyBtn.Activated:Connect(function()
 	local link = "https://discord.gg/sewRzHAG5J"
 	if setclipboard then setclipboard(link) elseif toclipboard then toclipboard(link) end
 	GetKeyBtn.Text = "¡COPIADO!"
@@ -5078,13 +5190,13 @@ end)
 if HEXA_IS_VIP then
 	KeyFrame.Visible = false
 	MainFrame.Visible = true
-	task.defer(function() animateOpen(MainFrame, MAIN_SIZE, "BACK") end)
+	task.defer(function() animateOpen(MainFrame, MAIN_SIZE, MOBILE_DEVICE and "QUAD" or "BACK") end)
 else
-	animateOpen(KeyFrame, KEY_SIZE, "BACK")
+	animateOpen(KeyFrame, KEY_SIZE, MOBILE_DEVICE and "QUAD" or "BACK")
 end
 
 local minimized = false
-MinButton.MouseButton1Click:Connect(function()
+MinButton.Activated:Connect(function()
 	if minimized then return end
 	minimized = true
 	local t = tween(MainFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
@@ -5092,11 +5204,11 @@ MinButton.MouseButton1Click:Connect(function()
 		if not minimized then return end
 		MainFrame.Visible = false
 		RestoreOrb.Visible = true
-		tween(RestoreOrb, tweenIn, {Size = UDim2.new(0, 58, 0, 58)})
+		tween(RestoreOrb, MOBILE_DEVICE and TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out) or tweenIn, {Size = UDim2.fromOffset(RESTORE_BUTTON_SIZE, RESTORE_BUTTON_SIZE)})
 	end)
 end)
 
-RestoreOrb.MouseButton1Click:Connect(function()
+RestoreOrb.Activated:Connect(function()
 	if not minimized then return end
 	minimized = false
 	local t = tween(RestoreOrb, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
@@ -5108,26 +5220,32 @@ RestoreOrb.MouseButton1Click:Connect(function()
 	end)
 end)
 
-TutorialBtn.MouseButton1Click:Connect(function()
-	animateOpen(Tutorial.Frame, Tutorial.getTargetSize(), "BACK")
+TutorialBtn.Activated:Connect(function()
+	animateOpen(Tutorial.Frame, Tutorial.getTargetSize(), MOBILE_DEVICE and "QUAD" or "BACK")
 end)
 
-Tutorial.CloseButton.MouseButton1Click:Connect(function()
+Tutorial.CloseButton.Activated:Connect(function()
 	local closeTutorial = tween(Tutorial.Frame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	closeTutorial.Completed:Connect(function()
 		Tutorial.Frame.Visible = false
 	end)
 end)
 
-CloseButton.MouseButton1Click:Connect(function()
+local closePromptOpen = false
+CloseButton.Activated:Connect(function()
+	if closePromptOpen then return end
+	closePromptOpen = true
 	ConfirmFrame.Visible = true
 	animateOpen(ConfirmFrame, UDim2.new(0, 280, 0, 140))
-	tween(MainFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
-	task.delay(0.35, function() MainFrame.Visible = false end)
+	local hideMain = tween(MainFrame, MOBILE_DEVICE and TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In) or tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
+	hideMain.Completed:Connect(function()
+		if closePromptOpen then MainFrame.Visible = false end
+	end)
 end)
 
-NoBtn.MouseButton1Click:Connect(function()
-	local t = tween(ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
+NoBtn.Activated:Connect(function()
+	closePromptOpen = false
+	local t = tween(ConfirmFrame, MOBILE_DEVICE and TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In) or tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	MainFrame.Visible = true
 	animateOpen(MainFrame, MAIN_SIZE)
 	t.Completed:Connect(function()
@@ -5135,7 +5253,8 @@ NoBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
-YesBtn.MouseButton1Click:Connect(function()
+YesBtn.Activated:Connect(function()
+	closePromptOpen = false
 	local t = tween(ConfirmFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	t.Completed:Connect(function()
 		cleanupMovement()
