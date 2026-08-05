@@ -269,30 +269,23 @@ local Theme = {
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
 local GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
-local MOBILE_DEVICE = UserInputService.TouchEnabled and (
-	not UserInputService.MouseEnabled
-	or not UserInputService.KeyboardEnabled
-	or GUI_VIEWPORT_SIZE.X <= 1100
-)
+local MOBILE_DEVICE = UserInputService.TouchEnabled and (not UserInputService.KeyboardEnabled or GUI_VIEWPORT_SIZE.X < 900)
 local function calculateMainSize()
 	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	local safeWidth = math.max(250, viewport.X - (MOBILE_DEVICE and 18 or 12))
-	local safeHeight = math.max(240, viewport.Y - (MOBILE_DEVICE and 18 or 12))
-	if MOBILE_DEVICE then
-		-- Más compacto en celular y siempre dentro del área visible.
-		return UDim2.fromOffset(math.min(520, safeWidth), math.min(380, safeHeight))
-	end
-	return UDim2.fromOffset(math.min(600, safeWidth), math.min(430, safeHeight))
+	return UDim2.fromOffset(
+		math.min(600, math.max(270, viewport.X - 12)),
+		math.min(430, math.max(270, viewport.Y - 12))
+	)
 end
 local function calculateKeySize()
 	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
-	local safeWidth = math.max(250, viewport.X - (MOBILE_DEVICE and 20 or 12))
-	local safeHeight = math.max(210, viewport.Y - (MOBILE_DEVICE and 20 or 12))
-	return UDim2.fromOffset(math.min(MOBILE_DEVICE and 330 or 340, safeWidth), math.min(230, safeHeight))
+	return UDim2.fromOffset(
+		math.min(340, math.max(250, viewport.X - 12)),
+		math.min(230, math.max(210, viewport.Y - 12))
+	)
 end
 local MAIN_SIZE = calculateMainSize()
 local KEY_SIZE = calculateKeySize()
-local updateResponsiveLayout = function() end
 
 local isInteractingWithSlider = false
 local Lang = {Current = "ES"}
@@ -301,7 +294,6 @@ local applySearchFilter = function() end
 local refreshFavoritesCard = function() end
 local registerFunctionButton = function() end
 local registerAllFunctionButtons = function() end
-local refreshCategoryNavigation = function() end
 
 local function mkCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -823,8 +815,7 @@ ScreenGui.DisplayOrder = 2147483647
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local parentedScreenGui = false
-if UserInputService.TouchEnabled then
-	-- PlayerGui es el destino más estable para interfaces móviles.
+if MOBILE_DEVICE then
 	parentedScreenGui = pcall(function()
 		ScreenGui.Parent = PlayerGui
 	end)
@@ -1367,7 +1358,6 @@ function Lang.Set(language)
 	end
 	task.defer(function()
 		refreshFavoritesCard()
-		refreshCategoryNavigation()
 		applySearchFilter()
 	end)
 end
@@ -1390,6 +1380,7 @@ KeyFrame.Visible = true
 KeyFrame.Parent = ScreenGui
 mkCorner(KeyFrame, 16)
 mkStroke(KeyFrame, Theme.Accent, 0.4, 2)
+makeDraggable(KeyFrame, KeyFrame)
 
 local KeyTitle = Instance.new("TextLabel")
 KeyTitle.BackgroundTransparency = 1
@@ -1399,9 +1390,7 @@ KeyTitle.Text = "HEXA X - SISTEMA DE CLAVE"
 KeyTitle.TextColor3 = Theme.TextMain
 KeyTitle.TextSize = 16
 KeyTitle.Font = Enum.Font.GothamBold
-KeyTitle.Active = true
 KeyTitle.Parent = KeyFrame
-makeDraggable(KeyFrame, KeyTitle)
 
 local KeyBoxContainer = Instance.new("Frame")
 KeyBoxContainer.BackgroundColor3 = Theme.Panel2
@@ -1561,17 +1550,13 @@ function Snow.start()
 	end
 end
 
-local MAIN_HEADER_HEIGHT = MOBILE_DEVICE and 96 or 106
 local Header = Instance.new("Frame")
 Header.BackgroundColor3 = Theme.Panel
 Header.BackgroundTransparency = 0.30
 Header.BorderSizePixel = 0
-Header.Position = UDim2.new(0, 2, 0, 0)
-Header.Size = UDim2.new(1, -4, 0, MAIN_HEADER_HEIGHT)
-Header.ClipsDescendants = true
+Header.Size = UDim2.new(1, 0, 0, 106)
 Header.ZIndex = 4
 Header.Parent = MainFrame
-mkCorner(Header, 15)
 
 local HeaderGlow = Instance.new("Frame")
 HeaderGlow.BackgroundColor3 = Theme.Accent
@@ -1583,51 +1568,33 @@ HeaderGlow.Parent = Header
 
 local Title = Instance.new("TextLabel")
 Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, MOBILE_DEVICE and 14 or 20, 0, MOBILE_DEVICE and 1 or 3)
-Title.Size = UDim2.new(0, MOBILE_DEVICE and 92 or 126, 0, 28)
+Title.Position = UDim2.new(0, 20, 0, 0)
+Title.Size = UDim2.new(1, -210, 0, 58)
 Title.Text = "Hexa X"
 Title.TextColor3 = Theme.TextMain
-Title.TextSize = MOBILE_DEVICE and 15 or 19
+Title.TextSize = 18
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.TextTruncate = Enum.TextTruncate.AtEnd
 Title.Parent = Header
-Title:SetAttribute("HexaNoTranslate", true)
 makeDraggable(MainFrame, Title)
 
-local HeaderSubtitle = Instance.new("TextLabel")
-HeaderSubtitle.BackgroundTransparency = 1
-HeaderSubtitle.Position = UDim2.new(0, MOBILE_DEVICE and 14 or 20, 0, 36)
-HeaderSubtitle.Size = UDim2.new(0, MOBILE_DEVICE and 80 or 130, 0, 18)
-HeaderSubtitle.Text = "aimbot universal"
-HeaderSubtitle.TextColor3 = Color3.fromRGB(210, 210, 210)
-HeaderSubtitle.TextTransparency = 0.26
-HeaderSubtitle.TextSize = MOBILE_DEVICE and 9 or 11
-HeaderSubtitle.Font = Enum.Font.GothamMedium
-HeaderSubtitle.TextXAlignment = Enum.TextXAlignment.Left
-HeaderSubtitle.TextTruncate = Enum.TextTruncate.AtEnd
-HeaderSubtitle.ZIndex = 5
-HeaderSubtitle.Parent = Header
-HeaderSubtitle:SetAttribute("HexaNoTranslate", true)
-
-local HEADER_BUTTON_SIZE = MOBILE_DEVICE and 30 or 34
-local HEADER_BUTTON_Y = MOBILE_DEVICE and 7 or 12
-local CloseButton = neonButton(Header, "X", UDim2.new(0, HEADER_BUTTON_SIZE, 0, HEADER_BUTTON_SIZE), UDim2.new(1, MOBILE_DEVICE and -38 or -46, 0, HEADER_BUTTON_Y), 4)
+local CloseButton = neonButton(Header, "X", UDim2.new(0, 34, 0, 34), UDim2.new(1, -46, 0, 12), 4)
 CloseButton.TextColor3 = Theme.Danger
 CloseButton.BackgroundColor3 = Theme.Panel2
 
-local MinButton = neonButton(Header, "-", UDim2.new(0, HEADER_BUTTON_SIZE, 0, HEADER_BUTTON_SIZE), UDim2.new(1, MOBILE_DEVICE and -73 or -86, 0, HEADER_BUTTON_Y), 4)
+local MinButton = neonButton(Header, "-", UDim2.new(0, 34, 0, 34), UDim2.new(1, -86, 0, 12), 4)
 MinButton.TextColor3 = Theme.TextOff
 MinButton.BackgroundColor3 = Theme.Panel2
 MinButton:SetAttribute("HexaNoFavorite", true)
 CloseButton:SetAttribute("HexaNoFavorite", true)
 
-local TutorialBtn = neonButton(Header, "?", UDim2.new(0, HEADER_BUTTON_SIZE, 0, HEADER_BUTTON_SIZE), UDim2.new(1, MOBILE_DEVICE and -108 or -126, 0, HEADER_BUTTON_Y), 4)
+local TutorialBtn = neonButton(Header, "?", UDim2.new(0, 34, 0, 34), UDim2.new(1, -126, 0, 12), 4)
 TutorialBtn.TextColor3 = Theme.TextOff
 TutorialBtn.BackgroundColor3 = Theme.Panel2
 TutorialBtn:SetAttribute("HexaNoFavorite", true)
 
-Lang.MainButton = neonButton(Header, "ES", UDim2.new(0, MOBILE_DEVICE and 38 or 42, 0, HEADER_BUTTON_SIZE), UDim2.new(1, MOBILE_DEVICE and -151 or -176, 0, HEADER_BUTTON_Y), 4)
+Lang.MainButton = neonButton(Header, "ES", UDim2.new(0, 42, 0, 34), UDim2.new(1, -176, 0, 12), 4)
 Lang.MainButton.TextColor3 = Theme.TextOff
 Lang.MainButton.BackgroundColor3 = Theme.Panel2
 Lang.MainButton:SetAttribute("HexaNoTranslate", true)
@@ -1638,8 +1605,8 @@ end)
 
 local SearchContainer = Instance.new("Frame")
 SearchContainer.Name = "HexaSearchContainer"
-SearchContainer.Position = UDim2.new(0, MOBILE_DEVICE and 12 or 20, 0, MOBILE_DEVICE and 56 or 61)
-SearchContainer.Size = UDim2.new(1, MOBILE_DEVICE and -24 or -40, 0, MOBILE_DEVICE and 32 or 34)
+SearchContainer.Position = UDim2.new(0, 20, 0, 61)
+SearchContainer.Size = UDim2.new(1, -40, 0, 34)
 SearchContainer.BackgroundColor3 = Theme.Panel2
 SearchContainer.BackgroundTransparency = 0.06
 SearchContainer.BorderSizePixel = 0
@@ -1666,14 +1633,8 @@ Lang.Set(Lang.Current)
 local OwnerVipButton = nil
 local OwnerFrame = nil
 if HEXA_IS_OWNER then
-	Title.Size = MOBILE_DEVICE and UDim2.new(0, 52, 0, 28) or UDim2.new(1, -274, 0, 58)
-	OwnerVipButton = neonButton(
-		Header,
-		MOBILE_DEVICE and "VIP" or "★ VIP",
-		UDim2.new(0, MOBILE_DEVICE and 42 or 58, 0, MOBILE_DEVICE and 30 or 34),
-		MOBILE_DEVICE and UDim2.new(0, 104, 0, 7) or UDim2.new(1, -246, 0, 12),
-		4
-	)
+	Title.Size = UDim2.new(1, -274, 0, 58)
+	OwnerVipButton = neonButton(Header, "★ VIP", UDim2.new(0, 58, 0, 34), UDim2.new(1, -246, 0, 12), 4)
 	OwnerVipButton.TextColor3 = Color3.fromRGB(255, 211, 46)
 	OwnerVipButton.BackgroundColor3 = Color3.fromRGB(40, 34, 15)
 	mkStroke(OwnerVipButton, Color3.fromRGB(255, 211, 46), 0.2, 1)
@@ -1850,249 +1811,25 @@ if HEXA_IS_OWNER then
 	refreshOwnerPanel()
 end
 
-local RestoreOrb
-if MOBILE_DEVICE then
-	RestoreOrb = Instance.new("TextButton")
-	RestoreOrb.Name = "HexaMobileOpenButton"
-	RestoreOrb.AnchorPoint = Vector2.new(0, 0.5)
-	RestoreOrb.Position = UDim2.new(0, 10, 0.5, 0)
-	RestoreOrb.BackgroundColor3 = Theme.Panel2
-	RestoreOrb.BackgroundTransparency = 0.04
-	RestoreOrb.Text = "HX"
-	RestoreOrb.TextColor3 = Theme.TextOff
-	RestoreOrb.TextSize = 14
-	RestoreOrb.Font = Enum.Font.GothamBold
-	RestoreOrb.AutoButtonColor = false
-	mkCorner(RestoreOrb, 12)
-	mkStroke(RestoreOrb, Theme.Accent, 0.35, 1)
-else
-	RestoreOrb = Instance.new("ImageButton")
-	RestoreOrb.Position = UDim2.new(0, 18, 0.2, 0)
-	RestoreOrb.BackgroundColor3 = Theme.Panel2
-	RestoreOrb.BackgroundTransparency = 1
-	RestoreOrb.Image = "rbxassetid://123138803129747"
-	RestoreOrb.ScaleType = Enum.ScaleType.Fit
-	RestoreOrb.AutoButtonColor = false
-end
+local RestoreOrb = Instance.new("ImageButton")
 RestoreOrb.Visible = false
 RestoreOrb.Size = UDim2.new(0, 0, 0, 0)
+RestoreOrb.Position = UDim2.new(0, 18, 0.2, 0)
+RestoreOrb.BackgroundColor3 = Theme.Panel2
+RestoreOrb.BackgroundTransparency = 1 
 RestoreOrb.BorderSizePixel = 0
-RestoreOrb.ZIndex = 140
+RestoreOrb.Image = "rbxassetid://123138803129747" 
+RestoreOrb.ScaleType = Enum.ScaleType.Fit
+RestoreOrb.AutoButtonColor = false
 RestoreOrb.Parent = ScreenGui
-if not MOBILE_DEVICE then makeDraggable(RestoreOrb, RestoreOrb) end
-
-local SIDEBAR_WIDTH = MOBILE_DEVICE and 68 or 136
-local SIDEBAR_PROFILE_HEIGHT = MOBILE_DEVICE and 50 or 52
-local SIDEBAR_PROFILE_MARGIN = 10
-local ACTIVE_CATEGORY = "COMBAT"
-local CategoryButtons = {}
-local CategoryDefinitions = {
-	{Id = "COMBAT", ES = "COMBATE", EN = "COMBAT", Icon = "combat"},
-	{Id = "VISUALS", ES = "VISUALES", EN = "VISUALS", Icon = "visuals"},
-	{Id = "MOVEMENT", ES = "MOVIMIENTO", EN = "MOVEMENT", Icon = "movement"},
-	{Id = "PLAYER", ES = "JUGADOR", EN = "PLAYER", Icon = "player"},
-	{Id = "VEHICLES", ES = "VEHÍCULOS", EN = "VEHICLES", Icon = "vehicle"},
-	{Id = "TELEPORT", ES = "TELETRANSPORTE", EN = "TELEPORT", Icon = "teleport"},
-	{Id = "SYSTEM", ES = "SISTEMA", EN = "SYSTEM", Icon = "system"},
-	{Id = "CUSTOMIZE", ES = "PERSONALIZAR", EN = "CUSTOMIZE", Icon = "customize"},
-	{Id = "COMMUNITY", ES = "COMUNIDAD", EN = "COMMUNITY", Icon = "community"},
-}
-local CategoryById = {}
-for _, category in ipairs(CategoryDefinitions) do
-	CategoryById[category.Id] = category
-end
-
-local CategorySidebar = Instance.new("ScrollingFrame")
-CategorySidebar.Name = "HexaCategorySidebar"
-CategorySidebar.Position = UDim2.new(0, 0, 0, MAIN_HEADER_HEIGHT)
-CategorySidebar.Size = UDim2.new(0, SIDEBAR_WIDTH, 1, -(MAIN_HEADER_HEIGHT + SIDEBAR_PROFILE_HEIGHT + SIDEBAR_PROFILE_MARGIN))
-CategorySidebar.BackgroundColor3 = Theme.Panel
-CategorySidebar.BackgroundTransparency = 0.18
-CategorySidebar.BorderSizePixel = 0
-CategorySidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
-CategorySidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
-CategorySidebar.ScrollBarThickness = MOBILE_DEVICE and 2 or 3
-CategorySidebar.ScrollBarImageColor3 = Theme.Accent
-CategorySidebar.ScrollBarImageTransparency = 0.55
-CategorySidebar.ScrollingDirection = Enum.ScrollingDirection.Y
-CategorySidebar.ZIndex = 3
-CategorySidebar.Parent = MainFrame
-
-local SidebarDivider = Instance.new("Frame")
-SidebarDivider.AnchorPoint = Vector2.new(0, 0)
-SidebarDivider.Position = UDim2.new(0, SIDEBAR_WIDTH - 1, 0, MAIN_HEADER_HEIGHT)
-SidebarDivider.Size = UDim2.new(0, 1, 1, -MAIN_HEADER_HEIGHT)
-SidebarDivider.BackgroundColor3 = Theme.Accent
-SidebarDivider.BackgroundTransparency = 0.82
-SidebarDivider.BorderSizePixel = 0
-SidebarDivider.ZIndex = 5
-SidebarDivider.Parent = MainFrame
-
-local SidebarPadding = Instance.new("UIPadding")
-SidebarPadding.PaddingTop = UDim.new(0, 10)
-SidebarPadding.PaddingBottom = UDim.new(0, 8)
-SidebarPadding.PaddingLeft = UDim.new(0, MOBILE_DEVICE and 7 or 8)
-SidebarPadding.PaddingRight = UDim.new(0, MOBILE_DEVICE and 7 or 9)
-SidebarPadding.Parent = CategorySidebar
-
-local SidebarLayout = Instance.new("UIListLayout")
-SidebarLayout.Padding = UDim.new(0, 7)
-SidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
-SidebarLayout.Parent = CategorySidebar
-
-local SidebarProfileCard = Instance.new("Frame")
-SidebarProfileCard.Name = "HexaSidebarProfile"
-SidebarProfileCard.AnchorPoint = Vector2.new(0, 1)
-SidebarProfileCard.Position = UDim2.new(0, 6, 1, -6)
-SidebarProfileCard.Size = UDim2.new(0, SIDEBAR_WIDTH - 12, 0, SIDEBAR_PROFILE_HEIGHT)
-SidebarProfileCard.BackgroundColor3 = Theme.Panel
-SidebarProfileCard.BackgroundTransparency = 0.10
-SidebarProfileCard.BorderSizePixel = 0
-SidebarProfileCard.ZIndex = 8
-SidebarProfileCard.Parent = MainFrame
-mkCorner(SidebarProfileCard, 10)
-mkStroke(SidebarProfileCard, Theme.Accent, 0.72, 1)
-
-local SidebarAvatar = Instance.new("ImageLabel")
-SidebarAvatar.Name = "SidebarAvatar"
-SidebarAvatar.Position = MOBILE_DEVICE and UDim2.new(0.5, -13, 0.5, -13) or UDim2.new(0, 8, 0.5, -14)
-SidebarAvatar.Size = UDim2.new(0, MOBILE_DEVICE and 26 or 28, 0, MOBILE_DEVICE and 26 or 28)
-SidebarAvatar.BackgroundTransparency = 1
-SidebarAvatar.BorderSizePixel = 0
-SidebarAvatar.Image = Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
-SidebarAvatar.ZIndex = 9
-SidebarAvatar.Parent = SidebarProfileCard
-mkCorner(SidebarAvatar, 999)
-
-local SidebarDisplayName = Instance.new("TextLabel")
-SidebarDisplayName.BackgroundTransparency = 1
-SidebarDisplayName.Position = UDim2.new(0, MOBILE_DEVICE and 39 or 44, 0, 8)
-SidebarDisplayName.Size = UDim2.new(1, -(MOBILE_DEVICE and 45 or 50), 0, 16)
-SidebarDisplayName.Text = LocalPlayer.DisplayName
-SidebarDisplayName.TextColor3 = Theme.TextMain
-SidebarDisplayName.TextSize = MOBILE_DEVICE and 9 or 11
-SidebarDisplayName.Font = Enum.Font.GothamSemibold
-SidebarDisplayName.TextXAlignment = Enum.TextXAlignment.Left
-SidebarDisplayName.TextTruncate = Enum.TextTruncate.AtEnd
-SidebarDisplayName.ZIndex = 9
-SidebarDisplayName.Visible = not MOBILE_DEVICE
-SidebarDisplayName.Parent = SidebarProfileCard
-SidebarDisplayName:SetAttribute("HexaNoTranslate", true)
-
-local SidebarUsername = Instance.new("TextLabel")
-SidebarUsername.BackgroundTransparency = 1
-SidebarUsername.Position = UDim2.new(0, MOBILE_DEVICE and 39 or 44, 0, 25)
-SidebarUsername.Size = UDim2.new(1, -(MOBILE_DEVICE and 45 or 50), 0, 14)
-SidebarUsername.Text = "@" .. LocalPlayer.Name
-SidebarUsername.TextColor3 = Color3.fromRGB(205, 205, 205)
-SidebarUsername.TextTransparency = 0.18
-SidebarUsername.TextSize = MOBILE_DEVICE and 8 or 9
-SidebarUsername.Font = Enum.Font.GothamMedium
-SidebarUsername.TextXAlignment = Enum.TextXAlignment.Left
-SidebarUsername.TextTruncate = Enum.TextTruncate.AtEnd
-SidebarUsername.ZIndex = 9
-SidebarUsername.Visible = not MOBILE_DEVICE
-SidebarUsername.Parent = SidebarProfileCard
-SidebarUsername:SetAttribute("HexaNoTranslate", true)
-
-local function iconFill(parent, x, y, width, height, rotation, radius)
-	local part = Instance.new("Frame")
-	part.Name = "HexaIconFill"
-	part.AnchorPoint = Vector2.new(0.5, 0.5)
-	part.Position = UDim2.fromOffset(x, y)
-	part.Size = UDim2.fromOffset(width, height)
-	part.Rotation = rotation or 0
-	part.BackgroundColor3 = Theme.TextMain
-	part.BorderSizePixel = 0
-	part.ZIndex = 8
-	part:SetAttribute("HexaIconFill", true)
-	part.Parent = parent
-	if radius then mkCorner(part, radius) end
-	return part
-end
-
-local function iconOutline(parent, x, y, width, height, radius, thickness)
-	local shape = Instance.new("Frame")
-	shape.Name = "HexaIconOutline"
-	shape.AnchorPoint = Vector2.new(0.5, 0.5)
-	shape.Position = UDim2.fromOffset(x, y)
-	shape.Size = UDim2.fromOffset(width, height)
-	shape.BackgroundTransparency = 1
-	shape.BorderSizePixel = 0
-	shape.ZIndex = 8
-	shape.Parent = parent
-	mkCorner(shape, radius or 0)
-	local stroke = mkStroke(shape, Theme.TextMain, 0, thickness or 1.5)
-	stroke:SetAttribute("HexaIconStroke", true)
-	return shape
-end
-
-local function setCategoryIconColor(holder, color)
-	for _, object in ipairs(holder:GetDescendants()) do
-		if object:IsA("Frame") and object:GetAttribute("HexaIconFill") == true then
-			object.BackgroundColor3 = color
-		elseif object:IsA("UIStroke") and object:GetAttribute("HexaIconStroke") == true then
-			object.Color = color
-		end
-	end
-end
-
-local function drawCategoryIcon(holder, iconName)
-	if iconName == "combat" then
-		iconOutline(holder, 10, 10, 10, 10, 999, 1.5)
-		iconFill(holder, 10, 1.5, 2, 5, 0, 1)
-		iconFill(holder, 10, 18.5, 2, 5, 0, 1)
-		iconFill(holder, 1.5, 10, 5, 2, 0, 1)
-		iconFill(holder, 18.5, 10, 5, 2, 0, 1)
-		iconFill(holder, 10, 10, 3, 3, 0, 999)
-	elseif iconName == "visuals" then
-		iconOutline(holder, 10, 10, 18, 11, 999, 1.5)
-		iconFill(holder, 10, 10, 5, 5, 0, 999)
-	elseif iconName == "movement" then
-		iconFill(holder, 10, 11.5, 2, 15, 0, 1)
-		iconFill(holder, 6.5, 5, 9, 2, -45, 1)
-		iconFill(holder, 13.5, 5, 9, 2, 45, 1)
-	elseif iconName == "player" then
-		iconOutline(holder, 10, 5.5, 7, 7, 999, 1.5)
-		iconOutline(holder, 10, 14.5, 14, 9, 6, 1.5)
-	elseif iconName == "vehicle" then
-		iconOutline(holder, 10, 11.5, 18, 8, 4, 1.5)
-		iconOutline(holder, 10, 7.5, 10, 6, 3, 1.5)
-		iconFill(holder, 5, 16.5, 4, 4, 0, 999)
-		iconFill(holder, 15, 16.5, 4, 4, 0, 999)
-	elseif iconName == "teleport" then
-		iconOutline(holder, 10, 7, 12, 12, 999, 1.5)
-		iconFill(holder, 10, 7, 3, 3, 0, 999)
-		iconFill(holder, 10, 15.5, 2, 8, 0, 1)
-		iconFill(holder, 7.5, 18, 6, 2, -35, 1)
-		iconFill(holder, 12.5, 18, 6, 2, 35, 1)
-	elseif iconName == "system" then
-		for _, rotation in ipairs({0, 45, 90, 135}) do
-			iconFill(holder, 10, 10, 2, 19, rotation, 1)
-		end
-		iconOutline(holder, 10, 10, 11, 11, 999, 1.5)
-		iconFill(holder, 10, 10, 3, 3, 0, 999)
-	elseif iconName == "customize" then
-		iconFill(holder, 10, 5, 18, 2, 0, 1)
-		iconFill(holder, 10, 10, 18, 2, 0, 1)
-		iconFill(holder, 10, 15, 18, 2, 0, 1)
-		iconFill(holder, 6, 5, 5, 5, 0, 999)
-		iconFill(holder, 14, 10, 5, 5, 0, 999)
-		iconFill(holder, 9, 15, 5, 5, 0, 999)
-	elseif iconName == "community" then
-		iconOutline(holder, 6, 6, 6, 6, 999, 1.4)
-		iconOutline(holder, 14, 6, 6, 6, 999, 1.4)
-		iconOutline(holder, 5.5, 14.5, 8, 7, 5, 1.4)
-		iconOutline(holder, 14.5, 14.5, 8, 7, 5, 1.4)
-	end
-end
+makeDraggable(RestoreOrb, RestoreOrb)
 
 local Content = Instance.new("ScrollingFrame")
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
-Content.Position = UDim2.new(0, SIDEBAR_WIDTH, 0, MAIN_HEADER_HEIGHT)
-Content.Size = UDim2.new(1, -SIDEBAR_WIDTH, 1, -MAIN_HEADER_HEIGHT)
-Content.ScrollBarThickness = MOBILE_DEVICE and 5 or 4
+Content.Position = UDim2.new(0, 0, 0, 108)
+Content.Size = UDim2.new(1, 0, 1, -108)
+Content.ScrollBarThickness = MOBILE_DEVICE and 6 or 4
 Content.ScrollBarImageColor3 = Theme.Accent
 Content.CanvasSize = UDim2.new(0, 0, 0, 0)
 Content.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -2101,164 +1838,16 @@ Content.ZIndex = 3
 Content.Parent = MainFrame
 
 local Padding = Instance.new("UIPadding")
-Padding.PaddingTop = UDim.new(0, 10)
+Padding.PaddingTop = UDim.new(0, 14)
 Padding.PaddingBottom = UDim.new(0, 16)
-Padding.PaddingLeft = UDim.new(0, MOBILE_DEVICE and 8 or 12)
-Padding.PaddingRight = UDim.new(0, MOBILE_DEVICE and 8 or 12)
+Padding.PaddingLeft = UDim.new(0, 14)
+Padding.PaddingRight = UDim.new(0, 14)
 Padding.Parent = Content
 
 local Layout = Instance.new("UIListLayout")
-Layout.Padding = UDim.new(0, 10)
+Layout.Padding = UDim.new(0, 14)
 Layout.SortOrder = Enum.SortOrder.LayoutOrder
 Layout.Parent = Content
-
-local CategoryHeader = Instance.new("Frame")
-CategoryHeader.Name = "HexaCategoryHeader"
-CategoryHeader.LayoutOrder = -100
-CategoryHeader.Size = UDim2.new(1, 0, 0, 40)
-CategoryHeader.BackgroundColor3 = Theme.Panel
-CategoryHeader.BackgroundTransparency = 0.24
-CategoryHeader.BorderSizePixel = 0
-CategoryHeader.ZIndex = 4
-CategoryHeader.Parent = Content
-mkCorner(CategoryHeader, 12)
-mkStroke(CategoryHeader, Theme.Accent, 0.80, 1)
-
-local CategoryHeaderAccent = Instance.new("Frame")
-CategoryHeaderAccent.Position = UDim2.new(0, 0, 0, 0)
-CategoryHeaderAccent.Size = UDim2.new(0, 4, 1, 0)
-CategoryHeaderAccent.BackgroundColor3 = Theme.Accent
-CategoryHeaderAccent.BorderSizePixel = 0
-CategoryHeaderAccent.ZIndex = 5
-CategoryHeaderAccent.Parent = CategoryHeader
-mkCorner(CategoryHeaderAccent, 4)
-
-local CategoryHeaderTitle = Instance.new("TextLabel")
-CategoryHeaderTitle.BackgroundTransparency = 1
-CategoryHeaderTitle.Position = UDim2.new(0, 14, 0, 0)
-CategoryHeaderTitle.Size = UDim2.new(1, -24, 1, 0)
-CategoryHeaderTitle.Text = "COMBATE"
-CategoryHeaderTitle.TextColor3 = Theme.TextMain
-CategoryHeaderTitle.TextSize = MOBILE_DEVICE and 12 or 13
-CategoryHeaderTitle.Font = Enum.Font.GothamBold
-CategoryHeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
-CategoryHeaderTitle.TextTruncate = Enum.TextTruncate.AtEnd
-CategoryHeaderTitle.ZIndex = 5
-CategoryHeaderTitle:SetAttribute("HexaNoTranslate", true)
-CategoryHeaderTitle.Parent = CategoryHeader
-
-local function selectCategory(categoryId)
-	if not CategoryById[categoryId] then return end
-	ACTIVE_CATEGORY = categoryId
-	SearchBox.Text = ""
-	Content.CanvasPosition = Vector2.new(0, 0)
-	refreshCategoryNavigation()
-	applySearchFilter()
-end
-
-for index, category in ipairs(CategoryDefinitions) do
-	local button = Instance.new("TextButton")
-	button.Name = "Category_" .. category.Id
-	button.LayoutOrder = index
-	button.Size = UDim2.new(1, 0, 0, MOBILE_DEVICE and 43 or 36)
-	button.BackgroundColor3 = Theme.Panel
-	button.BackgroundTransparency = 0.14
-	button.BorderSizePixel = 0
-	button.Text = ""
-	button.AutoButtonColor = false
-	button.ZIndex = 6
-	button:SetAttribute("HexaNoFavorite", true)
-	button.Parent = CategorySidebar
-	mkCorner(button, 10)
-	local buttonStroke = mkStroke(button, Theme.Accent, 0.86, 1)
-
-	local indicator = Instance.new("Frame")
-	indicator.Name = "ActiveIndicator"
-	indicator.Position = UDim2.new(0, 0, 0, 6)
-	indicator.Size = UDim2.new(0, 3, 1, -12)
-	indicator.BackgroundColor3 = Theme.Accent
-	indicator.BackgroundTransparency = 1
-	indicator.BorderSizePixel = 0
-	indicator.ZIndex = 7
-	indicator.Parent = button
-	mkCorner(indicator, 3)
-
-	local iconHolder = Instance.new("Frame")
-	iconHolder.Name = "CategoryIcon"
-	iconHolder.AnchorPoint = Vector2.new(0, 0.5)
-	iconHolder.Position = MOBILE_DEVICE and UDim2.new(0.5, -10, 0.5, 0) or UDim2.new(0, 11, 0.5, 0)
-	iconHolder.Size = UDim2.fromOffset(20, 20)
-	iconHolder.BackgroundTransparency = 1
-	iconHolder.ZIndex = 7
-	iconHolder.Parent = button
-	drawCategoryIcon(iconHolder, category.Icon)
-
-	local label = Instance.new("TextLabel")
-	label.Name = "CategoryLabel"
-	label.BackgroundTransparency = 1
-	label.Position = UDim2.new(0, 39, 0, 0)
-	label.Size = UDim2.new(1, -45, 1, 0)
-	label.Text = category.ES
-	label.TextColor3 = Theme.TextMain
-	label.TextSize = 10
-	label.Font = Enum.Font.GothamSemibold
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextTruncate = Enum.TextTruncate.AtEnd
-	label.Visible = not MOBILE_DEVICE
-	label.ZIndex = 7
-	label:SetAttribute("HexaNoTranslate", true)
-	label.Parent = button
-
-	CategoryButtons[category.Id] = {
-		Button = button,
-		Label = label,
-		Icon = iconHolder,
-		Indicator = indicator,
-		Stroke = buttonStroke,
-		Definition = category,
-	}
-
-	button.MouseEnter:Connect(function()
-		if ACTIVE_CATEGORY ~= category.Id then
-			tween(button, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				BackgroundColor3 = Color3.fromRGB(34, 34, 34),
-				BackgroundTransparency = 0.04,
-			})
-		end
-	end)
-	button.MouseLeave:Connect(function()
-		if ACTIVE_CATEGORY ~= category.Id then
-			tween(button, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				BackgroundColor3 = Theme.Panel,
-				BackgroundTransparency = 0.14,
-			})
-		end
-	end)
-	button.MouseButton1Click:Connect(function()
-		selectCategory(category.Id)
-	end)
-end
-
-refreshCategoryNavigation = function()
-	local selected = CategoryById[ACTIVE_CATEGORY] or CategoryDefinitions[1]
-	local searchActive = SearchBox and SearchBox.Text ~= ""
-	CategoryHeaderTitle.Text = searchActive
-		and (Lang.Current == "EN" and "SEARCH RESULTS" or "RESULTADOS DE BÚSQUEDA")
-		or (Lang.Current == "EN" and selected.EN or selected.ES)
-
-	for categoryId, data in pairs(CategoryButtons) do
-		local active = categoryId == ACTIVE_CATEGORY and not searchActive
-		data.Label.Text = Lang.Current == "EN" and data.Definition.EN or data.Definition.ES
-		data.Button.BackgroundColor3 = active and Theme.Panel2 or Theme.Panel
-		data.Button.BackgroundTransparency = active and 0.02 or 0.14
-		data.Label.TextColor3 = active and Theme.TextOff or Theme.TextMain
-		data.Indicator.BackgroundTransparency = active and 0 or 1
-		data.Stroke.Transparency = active and 0.40 or 0.86
-		setCategoryIconColor(data.Icon, active and Theme.TextOff or Theme.TextMain)
-	end
-end
-
-refreshCategoryNavigation()
 
 do
 local FAVORITES_FILE_NAME = ("HexaX_Favorites_%d.json"):format(LocalPlayer.UserId)
@@ -2307,7 +1896,6 @@ FavoritesCard.ClipsDescendants = true
 FavoritesCard.Visible = false
 FavoritesCard.Parent = Content
 FavoritesCard:SetAttribute("HexaSearchableCard", true)
-FavoritesCard:SetAttribute("HexaCategory", "COMBAT")
 mkCorner(FavoritesCard, 16)
 mkStroke(FavoritesCard, Theme.VipGold, 0.18, 1)
 
@@ -2472,9 +2060,7 @@ applySearchFilter = function()
 	for _, card in ipairs(Content:GetChildren()) do
 		if card:IsA("Frame") and card:GetAttribute("HexaSearchableCard") == true then
 			local defaultVisible = card ~= FavoritesCard or (HEXA_IS_VIP and card:GetAttribute("HexaHasFavorites") == true)
-			local categoryVisible = card:GetAttribute("HexaCategory") == ACTIVE_CATEGORY
-			local searchMatch = query ~= "" and string.find(cardSearchText(card), query, 1, true) ~= nil
-			local visible = query == "" and defaultVisible and categoryVisible or searchMatch
+			local visible = query == "" and defaultVisible or (query ~= "" and string.find(cardSearchText(card), query, 1, true) ~= nil)
 			card.Visible = visible
 			if visible and query ~= "" then matches += 1 end
 			for _, object in ipairs(card:GetDescendants()) do
@@ -2492,7 +2078,6 @@ applySearchFilter = function()
 		end
 	end
 	NoResultsLabel.Visible = query ~= "" and matches == 0
-	refreshCategoryNavigation()
 end
 
 SearchBox:GetPropertyChangedSignal("Text"):Connect(applySearchFilter)
@@ -2518,7 +2103,7 @@ end)
 
 end
 
-local function sectionCard(height: number, category: string?)
+local function sectionCard(height: number)
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(1, 0, 0, height)
 	card.BackgroundColor3 = Theme.Panel
@@ -2527,13 +2112,12 @@ local function sectionCard(height: number, category: string?)
 	card.ClipsDescendants = true
 	card.Parent = Content
 	card:SetAttribute("HexaSearchableCard", true)
-	card:SetAttribute("HexaCategory", category or "SYSTEM")
 	mkCorner(card, 16)
 	mkStroke(card, Theme.Accent, 0.78, 1)
 	return card
 end
 
-local ProfileCard = sectionCard(100, "PLAYER")
+local ProfileCard = sectionCard(100)
 ProfileCard.LayoutOrder = -1
 
 local PlayerAvatar = Instance.new("ImageLabel")
@@ -2547,64 +2131,40 @@ mkCorner(PlayerAvatar, 999)
 
 local PlayerName = Instance.new("TextLabel")
 PlayerName.BackgroundTransparency = 1
-PlayerName.Size = UDim2.fromOffset(150, 20)
-PlayerName.AnchorPoint = Vector2.new(0, 0)
-PlayerName.Position = UDim2.new(0.5, -100, 0, 72)
+PlayerName.Size = UDim2.new(1, 0, 0, 20)
+PlayerName.AnchorPoint = Vector2.new(0.5, 0)
+PlayerName.Position = UDim2.new(0.5, 0, 0, 72)
 PlayerName.Text = LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")"
 PlayerName.TextColor3 = Theme.TextMain
-PlayerName.TextSize = MOBILE_DEVICE and 11 or 13
+PlayerName.TextSize = 13
 PlayerName.Font = Enum.Font.GothamBold
-PlayerName.TextXAlignment = Enum.TextXAlignment.Right
-PlayerName.TextTruncate = Enum.TextTruncate.AtEnd
+PlayerName.TextXAlignment = Enum.TextXAlignment.Center
 PlayerName.Parent = ProfileCard
 
 local VipProfileBadge = Instance.new("TextLabel")
-VipProfileBadge.AnchorPoint = Vector2.new(0, 0)
-VipProfileBadge.Position = UDim2.new(0.5, 55, 0, 74)
-VipProfileBadge.Size = UDim2.fromOffset(40, 16)
+VipProfileBadge.AnchorPoint = Vector2.new(1, 0)
+VipProfileBadge.Position = UDim2.new(1, -12, 0, 12)
+VipProfileBadge.Size = UDim2.new(0, 76, 0, 24)
 VipProfileBadge.BackgroundColor3 = Color3.fromRGB(65, 52, 10)
-VipProfileBadge.BackgroundTransparency = 0.08
 VipProfileBadge.BorderSizePixel = 0
 VipProfileBadge.TextColor3 = Color3.fromRGB(255, 211, 46)
-VipProfileBadge.TextSize = MOBILE_DEVICE and 7 or 8
+VipProfileBadge.TextSize = 10
 VipProfileBadge.Font = Enum.Font.GothamBold
 VipProfileBadge.ZIndex = 5
 VipProfileBadge.Parent = ProfileCard
 VipProfileBadge:SetAttribute("HexaNoTranslate", true)
-mkCorner(VipProfileBadge, 6)
-mkStroke(VipProfileBadge, Color3.fromRGB(255, 211, 46), 0.38, 1)
-
-local function refreshProfileBadgeLayout()
-	if not ProfileCard.Parent then return end
-
-	local badgeWidth = HEXA_IS_OWNER and 48 or (HEXA_IS_VIP and 34 or 38)
-	VipProfileBadge.Size = UDim2.fromOffset(badgeWidth, 16)
-
-	local cardWidth = ProfileCard.AbsoluteSize.X
-	local maxNameWidth = math.max(90, cardWidth - badgeWidth - 34)
-	local measuredWidth = math.max(90, PlayerName.TextBounds.X + 2)
-	local nameWidth = math.min(measuredWidth, maxNameWidth)
-	local totalWidth = nameWidth + 5 + badgeWidth
-	local startOffset = -math.floor(totalWidth / 2)
-
-	PlayerName.Size = UDim2.fromOffset(nameWidth, 20)
-	PlayerName.Position = UDim2.new(0.5, startOffset, 0, 72)
-	VipProfileBadge.Position = UDim2.new(0.5, startOffset + nameWidth + 5, 0, 74)
-end
+mkCorner(VipProfileBadge, 8)
+mkStroke(VipProfileBadge, Color3.fromRGB(255, 211, 46), 0.25, 1)
 
 local function refreshProfileVipBadge()
-	VipProfileBadge.Text = HEXA_IS_OWNER and "OWNER" or (HEXA_IS_VIP and "VIP" or "FREE")
+	VipProfileBadge.Text = HEXA_IS_OWNER and "★ OWNER" or (HEXA_IS_VIP and "★ VIP" or "FREE")
 	VipProfileBadge.TextColor3 = HEXA_IS_VIP and Color3.fromRGB(255, 211, 46) or Color3.fromRGB(155, 155, 155)
 	VipProfileBadge.BackgroundColor3 = HEXA_IS_VIP and Color3.fromRGB(65, 52, 10) or Color3.fromRGB(45, 45, 45)
-	task.defer(refreshProfileBadgeLayout)
 end
 addVipStateListener(refreshProfileVipBadge)
-PlayerName:GetPropertyChangedSignal("TextBounds"):Connect(refreshProfileBadgeLayout)
-ProfileCard:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshProfileBadgeLayout)
 refreshProfileVipBadge()
-task.defer(refreshProfileBadgeLayout)
 
-local MoveCard = sectionCard(452, "MOVEMENT")
+local MoveCard = sectionCard(452)
 MoveCard.LayoutOrder = 10
 sectionTitle(MoveCard, "MOVIMIENTO Y FÍSICA", UDim2.new(0, 16, 0, 14))
 
@@ -2627,7 +2187,7 @@ local jumpSlider = createSlider(MoveCard, "Potencia de salto", 50, 2500, current
 local infiniteJumpButton = createToggleButton(MoveCard, "SALTO INFINITO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 346))
 local noclipButton = createToggleButton(MoveCard, "SIN COLISIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 393))
 
-local CombatCard = sectionCard(MOBILE_DEVICE and 486 or 394, "COMBAT")
+local CombatCard = sectionCard(MOBILE_DEVICE and 486 or 394)
 CombatCard.LayoutOrder = 20
 sectionTitle(CombatCard, "COMBATE Y PUNTERÍA", UDim2.new(0, 16, 0, 14))
 
@@ -2686,7 +2246,7 @@ local fovSlider = createSlider(CombatCard, "Radio del FOV", 30, 800, fovRadius, 
 	FovCircle.Size = UDim2.new(0, fovRadius * 2, 0, fovRadius * 2)
 end)
 
-local EspCard = sectionCard(204, "VISUALS")
+local EspCard = sectionCard(204)
 EspCard.LayoutOrder = 30
 sectionTitle(EspCard, "VISUALES (ESP)", UDim2.new(0, 16, 0, 14))
 
@@ -2736,7 +2296,7 @@ local r6Bones = {
 	{"Torso", "Left Leg"}, {"Torso", "Right Leg"}
 }
 
-local TpCard = sectionCard(340, "TELEPORT")
+local TpCard = sectionCard(340)
 TpCard.LayoutOrder = 40
 local TpTitle = sectionTitle(TpCard, "HERRAMIENTAS DEL JUGADOR", UDim2.new(0, 16, 0, 14))
 
@@ -2770,7 +2330,7 @@ ListLayout.Parent = DropdownList
 
 local GotoButton = neonButton(TpCard, "IR AL JUGADOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
 
-local CommunityCard = sectionCard(96, "COMMUNITY")
+local CommunityCard = sectionCard(96)
 CommunityCard.LayoutOrder = 90
 sectionTitle(CommunityCard, "COMUNIDAD", UDim2.new(0, 16, 0, 14))
 local DiscordButton = neonButton(CommunityCard, "UNIRSE AL DISCORD (COPIAR ENLACE)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
@@ -2916,18 +2476,13 @@ Tutorial.CloseButton.TextColor3 = Theme.TextOff
 Tutorial.CloseButton:SetAttribute("HexaNoFavorite", true)
 
 do
-updateResponsiveLayout = function()
+local function updateResponsiveLayout()
 	GUI_VIEWPORT_SIZE = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or GUI_VIEWPORT_SIZE
 	MAIN_SIZE = calculateMainSize()
 	KEY_SIZE = calculateKeySize()
 	VipNotification.Size = UDim2.fromOffset(math.min(390, math.max(250, GUI_VIEWPORT_SIZE.X - 16)), 82)
 	if MainFrame.Visible and MainFrame.Size.X.Offset > 0 then MainFrame.Size = MAIN_SIZE end
 	if KeyFrame.Visible and KeyFrame.Size.X.Offset > 0 then KeyFrame.Size = KEY_SIZE end
-	if MOBILE_DEVICE then
-		if MainFrame.Visible then MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0) end
-		if KeyFrame.Visible then KeyFrame.Position = UDim2.new(0.5, 0, 0.5, 0) end
-		if RestoreOrb.Visible then RestoreOrb.Position = UDim2.new(0, 10, 0.5, 0) end
-	end
 	if Tutorial.Frame.Visible and Tutorial.Frame.Size.X.Offset > 0 then Tutorial.Frame.Size = Tutorial.getTargetSize() end
 	if OwnerFrame then
 		local scale = OwnerFrame:FindFirstChildOfClass("UIScale")
@@ -3027,8 +2582,8 @@ local function isKeyActive(targetKey: any): boolean
 end
 
 local HexaSharedTargetFilters = {
-	TeamCheck = false,
-	WallCheck = false,
+	TeamCheck = true,
+	WallCheck = true,
 	AimSmoothing = false,
 	TargetPrediction = false,
 	SmoothingFactor = 5,
@@ -3320,10 +2875,6 @@ task.spawn(function()
 			LastFullbrightUpdate = 0,
 			TriggerBusy = false,
 			FullbrightOriginal = nil,
-			FullbrightAtmospheres = setmetatable({}, {__mode = "k"}),
-			FullbrightConnections = {},
-			FullbrightEffect = nil,
-			FullbrightApplying = false,
 			LastEspRender = 0,
 			Connections = {},
 			EspCache = {},
@@ -3390,7 +2941,7 @@ task.spawn(function()
 			MOBILE_DEVICE and UDim2.new(0, 16, 0, 280) or UDim2.new(0, 16, 0, 188)
 		)
 
-		local CombatAdvancedCard = sectionCard(512, "COMBAT")
+		local CombatAdvancedCard = sectionCard(512)
 		CombatAdvancedCard.LayoutOrder = 21
 		sectionTitle(CombatAdvancedCard, "COMBATE AVANZADO", UDim2.new(0, 16, 0, 14))
 		local WallButton = createToggleButton(CombatAdvancedCard, "WALL CHECK", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
@@ -3410,14 +2961,14 @@ task.spawn(function()
 		markVipControl(InfiniteAmmoButton)
 		local FullbrightButton = createToggleButton(CombatAdvancedCard, "FULLBRIGHT", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 458))
 
-		local EspAdvancedCard = sectionCard(184, "VISUALS")
+		local EspAdvancedCard = sectionCard(184)
 		EspAdvancedCard.LayoutOrder = 31
 		sectionTitle(EspAdvancedCard, "ESP AVANZADO", UDim2.new(0, 16, 0, 14))
 		local BoxButton = createToggleButton(EspAdvancedCard, "CAJA ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 		local NameButton = createToggleButton(EspAdvancedCard, "NOMBRE ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
 		local HealthButton = createToggleButton(EspAdvancedCard, "BARRA DE VIDA ESP", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 136))
 
-		local CameraMovementCard = sectionCard(264, "PLAYER")
+		local CameraMovementCard = sectionCard(264)
 		CameraMovementCard.LayoutOrder = 34
 		sectionTitle(CameraMovementCard, "CÁMARA Y MOVIMIENTO", UDim2.new(0, 16, 0, 14))
 		local DroneButton = createToggleButton(CameraMovementCard, "CÁMARA LIBRE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
@@ -3430,7 +2981,7 @@ task.spawn(function()
 			Settings.SpinSpeed = value
 		end)
 
-		local VehicleCard = sectionCard(158, "VEHICLES")
+		local VehicleCard = sectionCard(158)
 		VehicleCard.LayoutOrder = 35
 		sectionTitle(VehicleCard, "VEHÍCULOS", UDim2.new(0, 16, 0, 14))
 		local VehicleButton = createToggleButton(VehicleCard, "VELOCIDAD DE VEHÍCULOS", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
@@ -3438,7 +2989,7 @@ task.spawn(function()
 			Settings.VehicleMultiplier = value
 		end)
 
-		local ProtectionCard = sectionCard(140, "PLAYER")
+		local ProtectionCard = sectionCard(140)
 		ProtectionCard.LayoutOrder = 36
 		sectionTitle(ProtectionCard, "PROTECCIÓN DEL PERSONAJE", UDim2.new(0, 16, 0, 14))
 		local AntiStunButton = createToggleButton(ProtectionCard, "ANTI ATURDIMIENTO", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
@@ -3650,139 +3201,33 @@ task.spawn(function()
 			end)
 		end
 
-		local FULLBRIGHT_VALUES = {
-			Brightness = 3,
-			ClockTime = 14,
-			GlobalShadows = false,
-			FogStart = 0,
-			FogEnd = 1000000,
-			Ambient = Color3.fromRGB(178, 178, 178),
-			OutdoorAmbient = Color3.fromRGB(178, 178, 178),
-			ExposureCompensation = 0.35,
-		}
-
-		local FULLBRIGHT_PROPERTIES = {
-			"Brightness",
-			"ClockTime",
-			"GlobalShadows",
-			"FogStart",
-			"FogEnd",
-			"Ambient",
-			"OutdoorAmbient",
-			"ExposureCompensation",
-		}
-
-		local function disconnectFullbrightConnections()
-			for _, connection in ipairs(State.FullbrightConnections) do
-				pcall(function() connection:Disconnect() end)
-			end
-			table.clear(State.FullbrightConnections)
-		end
-
-		local function ensureFullbrightEffect()
-			if State.FullbrightEffect and State.FullbrightEffect.Parent == Lighting then
-				return State.FullbrightEffect
-			end
-			local stale = Lighting:FindFirstChild("HexaX_Fullbright")
-			if stale then pcall(function() stale:Destroy() end) end
-			local effect = Instance.new("ColorCorrectionEffect")
-			effect.Name = "HexaX_Fullbright"
-			effect.Brightness = 0.12
-			effect.Contrast = -0.04
-			effect.Saturation = 0
-			effect.TintColor = Color3.fromRGB(255, 255, 255)
-			effect.Enabled = true
-			effect.Parent = Lighting
-			State.FullbrightEffect = effect
-			return effect
-		end
-
-		local function enforceFullbright()
-			if not Settings.Fullbright or State.Dead or State.FullbrightApplying then return end
-			State.FullbrightApplying = true
-			pcall(function()
-				for property, value in pairs(FULLBRIGHT_VALUES) do
-					Lighting[property] = value
-				end
-				ensureFullbrightEffect()
-				for _, child in ipairs(Lighting:GetChildren()) do
-					if child:IsA("Atmosphere") then
-						if not State.FullbrightAtmospheres[child] then
-							State.FullbrightAtmospheres[child] = {
-								Density = child.Density,
-								Haze = child.Haze,
-								Glare = child.Glare,
-							}
-						end
-						child.Density = 0
-						child.Haze = 0
-						child.Glare = 0
-					end
-				end
-			end)
-			State.FullbrightApplying = false
-		end
-
-		local function bindFullbrightGuards()
-			if #State.FullbrightConnections > 0 then return end
-			for _, property in ipairs(FULLBRIGHT_PROPERTIES) do
-				local connection = Lighting:GetPropertyChangedSignal(property):Connect(function()
-					if Settings.Fullbright and not State.FullbrightApplying then
-						task.defer(enforceFullbright)
-					end
-				end)
-				table.insert(State.FullbrightConnections, connection)
-			end
-			local childConnection = Lighting.ChildAdded:Connect(function(child)
-				if Settings.Fullbright and (child:IsA("Atmosphere") or child:IsA("ColorCorrectionEffect")) then
-					task.defer(enforceFullbright)
-				end
-			end)
-			table.insert(State.FullbrightConnections, childConnection)
-		end
-
 		local function applyFullbright()
 			if not State.FullbrightOriginal then
-				State.FullbrightOriginal = {}
-				for _, property in ipairs(FULLBRIGHT_PROPERTIES) do
-					local ok, value = pcall(function() return Lighting[property] end)
-					if ok then State.FullbrightOriginal[property] = value end
-				end
+				State.FullbrightOriginal = {
+					Brightness = Lighting.Brightness,
+					ClockTime = Lighting.ClockTime,
+					GlobalShadows = Lighting.GlobalShadows,
+					FogEnd = Lighting.FogEnd,
+				}
 			end
-			bindFullbrightGuards()
-			enforceFullbright()
+			pcall(function()
+				Lighting.Brightness = 2
+				Lighting.ClockTime = 14
+				Lighting.GlobalShadows = false
+				Lighting.FogEnd = 7863000
+			end)
 		end
 
 		local function restoreFullbright()
-			disconnectFullbrightConnections()
-			State.FullbrightApplying = true
 			local original = State.FullbrightOriginal
-			if original then
-				pcall(function()
-					for property, value in pairs(original) do
-						Lighting[property] = value
-					end
-				end)
-			end
-			for atmosphere, values in pairs(State.FullbrightAtmospheres) do
-				if atmosphere and atmosphere.Parent then
-					pcall(function()
-						atmosphere.Density = values.Density
-						atmosphere.Haze = values.Haze
-						atmosphere.Glare = values.Glare
-					end)
-				end
-				State.FullbrightAtmospheres[atmosphere] = nil
-			end
-			if State.FullbrightEffect then
-				pcall(function() State.FullbrightEffect:Destroy() end)
-				State.FullbrightEffect = nil
-			else
-				local stale = Lighting:FindFirstChild("HexaX_Fullbright")
-				if stale then pcall(function() stale:Destroy() end) end
-			end
+			if not original then return end
+			pcall(function()
+				Lighting.Brightness = original.Brightness
+				Lighting.ClockTime = original.ClockTime
+				Lighting.GlobalShadows = original.GlobalShadows
+				Lighting.FogEnd = original.FogEnd
+			end)
 			State.FullbrightOriginal = nil
-			State.FullbrightApplying = false
 		end
 
 		-- Disable any Silent Aim hook left by an older Hexa X execution in this Roblox session.
@@ -4364,12 +3809,10 @@ task.spawn(function()
 		bindToggle(NameButton, "NameESP", function(enabled) if not enabled then renderEsp() end end)
 		bindToggle(HealthButton, "HealthESP", function(enabled) if not enabled then renderEsp() end end)
 
-		HexaSharedTargetFilters.WallCheck = false
-		HexaSharedTargetFilters:SetTeamCheck(false)
-		Settings.WallCheck = false
-		Settings.TeamCheck = false
-		setActive(WallButton, false)
-		setActive(TeamButton, false)
+		HexaSharedTargetFilters.WallCheck = true
+		HexaSharedTargetFilters:SetTeamCheck(true)
+		setActive(WallButton, true)
+		setActive(TeamButton, true)
 
 		addVipStateListener(function(isVip)
 			if isVip or State.Dead then return end
@@ -4484,7 +3927,7 @@ task.spawn(function()
 				restoreWeapons()
 			end
 			if Settings.Triggerbot then updateTriggerbot(now) end
-			if Settings.Fullbright and now - State.LastFullbrightUpdate >= 0.10 then
+			if Settings.Fullbright and now - State.LastFullbrightUpdate >= 0.25 then
 				State.LastFullbrightUpdate = now
 				applyFullbright()
 			end
@@ -4535,7 +3978,7 @@ task.spawn(function()
 			return connection
 		end
 
-		local EssentialsCard = sectionCard(252, "COMBAT")
+		local EssentialsCard = sectionCard(252)
 		EssentialsCard.LayoutOrder = 22
 		sectionTitle(EssentialsCard, "FUNCIONES ESENCIALES", UDim2.new(0, 16, 0, 14))
 
@@ -4925,39 +4368,24 @@ local function animateOpen(gui: GuiObject, targetSize: UDim2, forcedStyle: strin
 end
 
 local function openMainInterface()
-	updateResponsiveLayout()
 	KeyFrame.Visible = false
-	if MOBILE_DEVICE then MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0) end
 	MainFrame.Visible = true
 	animateOpen(MainFrame, MAIN_SIZE)
 end
 
-local keySubmissionBusy = false
-local function submitKey()
-	if keySubmissionBusy then return end
+CheckKeyBtn.MouseButton1Click:Connect(function()
 	local entered = tostring(KeyBox.Text or "")
 	local normalKey = entered == "h3xa-ny"
 	local vipCode, vipInfo = validateVipCode(entered, LocalPlayer.Name, LocalPlayer.UserId)
 	if normalKey or vipCode then
-		keySubmissionBusy = true
 		if vipCode then
 			setVipState(true, string.upper(entered:gsub("%s+", "")), vipInfo)
 			KeyBox.Text = ""
 			KeyBox.PlaceholderText = "¡VIP ACTIVADO!"
 		end
-		local opened = false
-		local function finishOpening()
-			if opened then return end
-			opened = true
-			openMainInterface()
-		end
 		local t = tween(KeyFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
-		t.Completed:Connect(finishOpening)
-		task.delay(0.45, function()
-			if ScreenGui and ScreenGui.Parent and not MainFrame.Visible then finishOpening() end
-		end)
+		t.Completed:Connect(openMainInterface)
 	else
-		keySubmissionBusy = false
 		KeyBox.Text = ""
 		if vipInfo and vipInfo.reason == "EXPIRED" then
 			KeyBox.PlaceholderText = Lang.Current == "EN" and "VIP code expired!" or "¡Código VIP expirado!"
@@ -4970,10 +4398,6 @@ local function submitKey()
 			KeyBox.PlaceholderText = "Escribe la clave o código VIP..."
 		end)
 	end
-end
-CheckKeyBtn.Activated:Connect(submitKey)
-KeyBox.FocusLost:Connect(function(enterPressed)
-	if enterPressed then submitKey() end
 end)
 
 GetKeyBtn.MouseButton1Click:Connect(function()
@@ -5131,11 +4555,9 @@ end)
 UI_READY = true
 task.defer(function()
 	registerAllFunctionButtons()
-	refreshCategoryNavigation()
 	applySearchFilter()
 end)
 
-updateResponsiveLayout()
 if HEXA_IS_VIP then
 	KeyFrame.Visible = false
 	MainFrame.Visible = true
@@ -5145,7 +4567,7 @@ else
 end
 
 local minimized = false
-MinButton.Activated:Connect(function()
+MinButton.MouseButton1Click:Connect(function()
 	if minimized then return end
 	minimized = true
 	local t = tween(MainFrame, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
@@ -5157,15 +4579,13 @@ MinButton.Activated:Connect(function()
 	end)
 end)
 
-RestoreOrb.Activated:Connect(function()
+RestoreOrb.MouseButton1Click:Connect(function()
 	if not minimized then return end
 	minimized = false
 	local t = tween(RestoreOrb, tweenOut, {Size = UDim2.new(0, 0, 0, 0)})
 	t.Completed:Connect(function()
 		if minimized then return end
 		RestoreOrb.Visible = false
-		updateResponsiveLayout()
-		if MOBILE_DEVICE then MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0) end
 		MainFrame.Visible = true
 		animateOpen(MainFrame, MAIN_SIZE)
 	end)
@@ -5311,14 +4731,14 @@ task.spawn(function()
 			return character, character:FindFirstChildOfClass("Humanoid"), character:FindFirstChild("HumanoidRootPart")
 		end
 
-		function X:makeCard(height, title, category)
-			local card = sectionCard(height, category)
+		function X:makeCard(height, title)
+			local card = sectionCard(height)
 			local titleLabel = sectionTitle(card, title, UDim2.new(0, 16, 0, 14))
 			return card, titleLabel
 		end
 
 		function X:setupCrosshair()
-			self.CrosshairCard, self.CrosshairTitle = self:makeCard(394, "MIRA PERSONALIZADA", "VISUALS")
+			self.CrosshairCard, self.CrosshairTitle = self:makeCard(394, "MIRA PERSONALIZADA")
 			self.CrosshairCard.LayoutOrder = 32
 			self.CrosshairOverlay = Instance.new("Frame")
 			self.CrosshairOverlay.Name = "HexaCustomCrosshair"
@@ -5434,7 +4854,7 @@ task.spawn(function()
 		end
 
 		function X:setupMovementExtra()
-			self.MoveExtraCard, self.MoveExtraTitle = self:makeCard(332, "MOVIMIENTO EXTRA", "MOVEMENT")
+			self.MoveExtraCard, self.MoveExtraTitle = self:makeCard(332, "MOVIMIENTO EXTRA")
 			self.MoveExtraCard.LayoutOrder = 11
 			self.GravitySlider = createSlider(self.MoveExtraCard, "Gravedad", 0, 300, math.floor(self.GravityDefault + 0.5), 42, function(value)
 				workspace.Gravity = value
@@ -5521,7 +4941,7 @@ task.spawn(function()
 		end
 
 		function X:setupPlayerVisuals()
-			self.PlayerCard, self.PlayerTitle = self:makeCard(294, "JUGADOR Y CÁMARA", "PLAYER")
+			self.PlayerCard, self.PlayerTitle = self:makeCard(294, "JUGADOR Y CÁMARA")
 			self.PlayerCard.LayoutOrder = 50
 			self.RemoveFogButton = createToggleButton(self.PlayerCard, "ELIMINAR NIEBLA", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 			self.RemoveBlurButton = createToggleButton(self.PlayerCard, "ELIMINAR DESENFOQUE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
@@ -5847,7 +5267,7 @@ task.spawn(function()
 		end
 
 		function X:setupTeleportTools()
-			self.TeleportCard, self.TeleportTitle = self:makeCard(250, "UTILIDADES DE TELETRANSPORTE", "TELEPORT")
+			self.TeleportCard, self.TeleportTitle = self:makeCard(250, "UTILIDADES DE TELETRANSPORTE")
 			self.TeleportCard.LayoutOrder = 41
 			self.SavePositionButton = neonButton(self.TeleportCard, "GUARDAR POSICIÓN", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 			self.ReturnPositionButton = neonButton(self.TeleportCard, "VOLVER A LA POSICIÓN GUARDADA", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
@@ -5900,7 +5320,7 @@ task.spawn(function()
 		end
 
 		function X:setupInfoHud()
-			self.InfoCard, self.InfoTitle = self:makeCard(282, "INFORMACIÓN", "SYSTEM")
+			self.InfoCard, self.InfoTitle = self:makeCard(282, "INFORMACIÓN")
 			self.InfoCard.LayoutOrder = 60
 			self.InfoHud = Instance.new("Frame")
 			self.InfoHud.Name = "HexaInfoHud"
@@ -6011,7 +5431,7 @@ task.spawn(function()
 		end
 
 		function X:setupSafety()
-			self.SafetyCard, self.SafetyTitle = self:makeCard(98, "SEGURIDAD Y CONTROL", "SYSTEM")
+			self.SafetyCard, self.SafetyTitle = self:makeCard(98, "SEGURIDAD Y CONTROL")
 			self.SafetyCard.LayoutOrder = -3
 			self.PanicButton = Instance.new("TextButton")
 			self.PanicButton.Size = UDim2.new(1, -32, 0, 38)
@@ -6044,12 +5464,12 @@ task.spawn(function()
 		end
 
 		function X:setupMisc()
-			self.AutomationCard, self.AutomationTitle = self:makeCard(140, "AUTOMATIZACIÓN", "SYSTEM")
+			self.AutomationCard, self.AutomationTitle = self:makeCard(140, "AUTOMATIZACIÓN")
 			self.AutomationCard.LayoutOrder = 70
 			self.AutoRespawnButton = createToggleButton(self.AutomationCard, "REAPARICIÓN AUTOMÁTICA", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 			self.AutoEquipButton = createToggleButton(self.AutomationCard, "EQUIPAR HERRAMIENTA AUTOMÁTICAMENTE", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
 
-			self.SystemCard, self.SystemTitle = self:makeCard(232, "SISTEMA Y UTILIDADES", "SYSTEM")
+			self.SystemCard, self.SystemTitle = self:makeCard(232, "SISTEMA Y UTILIDADES")
 			self.SystemCard.LayoutOrder = 71
 			self.AntiAfkButton = createToggleButton(self.SystemCard, "ANTI AUSENCIA (AFK)", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 44))
 			self.ReconnectButton = neonButton(self.SystemCard, "RECONECTAR AL SERVIDOR", UDim2.new(1, -32, 0, 38), UDim2.new(0, 16, 0, 90))
@@ -6229,7 +5649,6 @@ task.spawn(function()
 		function X:applyStreamer()
 			PlayerAvatar.Visible = not self.Streamer
 			PlayerName.Text = self.Streamer and "MODO TRANSMISIÓN" or (LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")")
-			task.defer(refreshProfileBadgeLayout)
 			ByNonyLabel.Visible = not self.Streamer
 			VipProfileBadge.Visible = not self.Streamer
 			if OwnerVipButton then OwnerVipButton.Visible = not self.Streamer end
@@ -6238,7 +5657,7 @@ task.spawn(function()
 		end
 
 		function X:setupPersonalization()
-			self.PersonalCard, self.PersonalTitle = self:makeCard(204, "PERSONALIZACIÓN", "CUSTOMIZE")
+			self.PersonalCard, self.PersonalTitle = self:makeCard(204, "PERSONALIZACIÓN")
 			self.PersonalCard.LayoutOrder = 80
 			local categoryVipBadge = Instance.new("TextLabel")
 			categoryVipBadge.Name = "HexaVipBadge"
@@ -6531,7 +5950,6 @@ task.spawn(function()
 		Lang.Set(Lang.Current)
 		task.defer(function()
 			registerAllFunctionButtons()
-			refreshCategoryNavigation()
 			applySearchFilter()
 		end)
 	end)
